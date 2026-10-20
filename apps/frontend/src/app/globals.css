@@ -1,0 +1,102 @@
+@import "tailwindcss";
+
+/*
+  THEMES
+  Every color in the app comes from these variables, so a theme just swaps them.
+  In components we use them as normal Tailwind classes:
+    bg-page, bg-surface, bg-subtle, border-line, text-ink, text-muted,
+    bg-accent, bg-accent-soft, text-accent-ink
+  The active theme is set on <html data-theme="theme_ocean"> (see PlayerProvider).
+*/
+@theme inline {
+  --color-page: var(--page);
+  --color-surface: var(--surface);
+  --color-subtle: var(--subtle);
+  --color-line: var(--line);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-ink: var(--accent-ink);
+}
+
+:root,
+[data-theme="theme_classic"] {
+  --page: #f6f7fb;
+  --surface: #ffffff;
+  --subtle: #f1f3f8;
+  --line: #e2e6ee;
+  --ink: #1e2230;
+  --muted: #6b7280;
+  --accent: #4f46e5;
+  --accent-soft: #eef2ff;
+  --accent-ink: #4338ca;
+}
+
+[data-theme="theme_ocean"] {
+  --page: #f0f7fa;
+  --surface: #ffffff;
+  --subtle: #e6f3f7;
+  --line: #cfe4ec;
+  --ink: #0f2a36;
+  --muted: #5b7380;
+  --accent: #0891b2;
+  --accent-soft: #e0f5fa;
+  --accent-ink: #0e7490;
+}
+
+[data-theme="theme_forest"] {
+  --page: #f3f7f2;
+  --surface: #ffffff;
+  --subtle: #eaf2e8;
+  --line: #d4e3d1;
+  --ink: #1b2a1d;
+  --muted: #5f705f;
+  --accent: #15803d;
+  --accent-soft: #e5f4e9;
+  --accent-ink: #166534;
+}
+
+[data-theme="theme_sunset"] {
+  --page: #fdf6f2;
+  --surface: #ffffff;
+  --subtle: #fbece4;
+  --line: #f1d9cc;
+  --ink: #2f1c14;
+  --muted: #7c6157;
+  --accent: #ea580c;
+  --accent-soft: #fdeee4;
+  --accent-ink: #c2410c;
+}
+
+[data-theme="theme_midnight"] {
+  --page: #0f1220;
+  --surface: #171b2e;
+  --subtle: #1f2440;
+  --line: #2b3152;
+  --ink: #e6e8f2;
+  --muted: #9aa0bd;
+  --accent: #818cf8;
+  --accent-soft: #252b4d;
+  --accent-ink: #a5b4fc;
+}
+
+body {
+  background: var(--page);
+  color: var(--ink);
+}
+
+/*
+  SCROLLBARS
+  Thin and theme-colored, so they're easy to ignore but still show that an area scrolls.
+  (Scroll boxes also use [scrollbar-gutter:stable], which keeps space for the scrollbar
+  so the layout doesn't jump sideways when one appears.)
+*/
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+
+*:hover {
+  scrollbar-color: var(--muted) transparent;
+}

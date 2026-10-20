@@ -1,0 +1,22 @@
+# dependencies
+node_modules/
+
+# build output
+.next/
+dist/
+out/
+
+# env files (secrets never go in git)
+.env
+.env*.local
+!.env.example
+
+# misc
+.DS_Store
+*.log
+.vercel
+*.tsbuildinfo
+next-env.d.ts
+
+# local demo database (used when there are no Supabase keys)
+.local-db.json

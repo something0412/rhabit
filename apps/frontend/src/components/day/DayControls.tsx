@@ -1,0 +1,194 @@
+"use client";
+
+import type { DayResponse } from "@productivity/shared";
+import { REWARDS, deadlineRemainingSeconds, formatSeconds } from "@productivity/shared";
+import { api } from "@/lib/api";
+import { errorMessage } from "@/lib/errorMessage";
+import { formatReward } from "@/lib/rewards";
+import { useNotifications } from "@/components/notifications/NotificationProvider";
+
+interface Props {
+  data: DayResponse;
+  now: number;
+  isToday: boolean;
+  onUpdate: (data: DayResponse) => void;
+}
+
+// The bar at the top: Start / Day off / Pause / Resume / Emergency stop / End day
+export function DayControls({ data, now, isToday, onUpdate }: Props) {
+  const { notify } = useNotifications();
+  const { day, status } = data;
+  const dayOffCards = status.inventory.day_off_card ?? 0;
+
+  async function startDay() {
+    try {
+      const res = await api.post<DayResponse>(`/days/${day.id}/start`);
+      onUpdate(res.data);
+    } catch (error) {
+      notify("danger", "Couldn't start the day", errorMessage(error));
+    }
+  }
+
+  async function takeDayOff() {
+    if (!window.confirm(`Use a Day Off card for this day? You have ${dayOffCards}.`)) return;
+    try {
+      const res = await api.post<DayResponse>(`/days/${day.id}/day-off`);
+      onUpdate(res.data);
+    } catch (error) {
+      notify("danger", "Couldn't take a day off", errorMessage(error));
+    }
+  }
+
+  async function pauseDay(type: "pause" | "emergency") {
+    try {
+      const res = await api.post<DayResponse>(`/days/${day.id}/pause`, { type });
+      onUpdate(res.data);
+      if (type === "emergency") notify("info", "Emergency stop", "Everything is frozen until you press Continue.");
+    } catch (error) {
+      notify("danger", "Couldn't pause", errorMessage(error));
+    }
+  }
+
+  async function resumeDay() {
+    try {
+      const res = await api.post<DayResponse>(`/days/${day.id}/resume`);
+      onUpdate(res.data);
+    } catch (error) {
+      notify("danger", "Couldn't resume", errorMessage(error));
+    }
+  }
+
+  async function finishDay() {
+    const warning =
+      day.mode === "flexible"
+        ? "End the day now?"
+        : `Unfinished tasks will count as missed (${formatReward(REWARDS.missTask)} each). End the day now?`;
+    if (!window.confirm(warning)) return;
+
+    try {
+      const res = await api.post<DayResponse>(`/days/${day.id}/finish`);
+      onUpdate(res.data);
+    } catch (error) {
+      notify("danger", "Couldn't finish the day", errorMessage(error));
+    }
+  }
+
+  async function restartDay() {
+    const message =
+      "Restart today from the beginning?\n\n" +
+      "• Every task goes back to planned and timers reset\n" +
+      "• No penalties, but any XP and coins from today are undone too";
+    if (!window.confirm(message)) return;
+
+    try {
+      const res = await api.post<DayResponse>(`/days/${day.id}/restart`);
+      onUpdate(res.data);
+      notify("info", "Day restarted", "Pick a mode and press Start when you're ready.");
+    } catch (error) {
+      notify("danger", "Couldn't restart the day", errorMessage(error));
+    }
+  }
+
+  const restartButton = isToday && (
+    <button onClick={restartDay} className="shrink-0 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink hover:bg-subtle">
+      ↻ Restart day
+    </button>
+  );
+
+  // ----- before the day starts -----
+  if (day.status === "planning") {
+    return (
+      <section className="flex items-center justify-between gap-4 rounded-xl border border-line bg-surface p-4">
+        <div>
+          <p className="text-sm font-medium">{isToday ? "Ready when you are" : "Planning ahead"}</p>
+          <p className="text-xs text-muted">
+            {isToday ? "Add your tasks, pick a mode, then press Start." : "You can start this plan tomorrow."}
+          </p>
+        </div>
+        <div className="flex shrink-0 gap-2">
+          <button
+            onClick={takeDayOff}
+            disabled={dayOffCards === 0}
+            title={dayOffCards === 0 ? "No Day Off cards. Buy one in the Store." : undefined}
+            className="rounded-lg border border-line px-3 py-2 text-sm hover:bg-subtle disabled:opacity-40"
+          >
+            🏖️ Day off ({dayOffCards})
+          </button>
+          {isToday && (
+            <button onClick={startDay} className="rounded-lg bg-accent px-5 py-2 text-sm font-medium text-white hover:opacity-90">
+              Start day
+            </button>
+          )}
+        </div>
+      </section>
+    );
+  }
+
+  // ----- the day is over (or a day off) -----
+  if (day.status !== "active") {
+    const summary = {
+      done: { text: "Day complete! Every task finished.", style: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700" },
+      failed: { text: "Day ended with missed tasks.", style: "border-red-500/30 bg-red-500/10 text-red-600" },
+      excused: { text: "Day excused (emergency). No penalty.", style: "border-line bg-subtle text-muted" },
+      day_off: { text: "🏖️ Day off. Enjoy your rest. No tasks, no penalties.", style: "border-sky-500/30 bg-sky-500/10 text-sky-700" },
+    }[day.status];
+    return (
+      <section className={`flex items-center justify-between gap-4 rounded-xl border p-4 text-sm font-medium ${summary.style}`}>
+        <span>{summary.text}</span>
+        {day.status !== "day_off" && restartButton}
+      </section>
+    );
+  }
+
+  // ----- the day is running -----
+  const deadlineLeft = deadlineRemainingSeconds(day, now);
+  const isEmergency = day.pause_type === "emergency";
+
+  return (
+    <section
+      className={`flex items-center justify-between rounded-xl border p-4 ${
+        isEmergency ? "border-red-500/40 bg-red-500/10" : day.paused_at ? "border-amber-500/40 bg-amber-500/10" : "border-line bg-surface"
+      }`}
+    >
+      <div>
+        <p className="text-sm font-medium">
+          {isEmergency ? "Emergency stop" : day.paused_at ? "Paused" : "Day in progress"}
+          <span className="ml-2 rounded bg-subtle px-1.5 py-0.5 text-xs capitalize text-muted">{day.mode} mode</span>
+        </p>
+        {deadlineLeft !== null && (
+          <p className="mt-1 font-mono text-2xl">
+            {formatSeconds(deadlineLeft)} <span className="font-sans text-xs text-muted">until deadline</span>
+          </p>
+        )}
+      </div>
+
+      <div className="flex gap-2">
+        {day.paused_at ? (
+          <button onClick={resumeDay} className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90">
+            Continue
+          </button>
+        ) : (
+          <>
+            <button onClick={() => pauseDay("pause")} className="rounded-lg border border-line px-4 py-2 text-sm hover:bg-subtle">
+              Pause
+            </button>
+            <button
+              onClick={() => pauseDay("emergency")}
+              className="rounded-lg border border-red-500/40 px-4 py-2 text-sm text-red-600 hover:bg-red-500/10"
+            >
+              Emergency stop
+            </button>
+          </>
+        )}
+        <button onClick={finishDay} className="rounded-lg px-3 py-2 text-sm text-muted hover:bg-subtle">
+          End day
+        </button>
+        {isToday && (
+          <button onClick={restartDay} title="Restart day" className="rounded-lg px-3 py-2 text-sm text-muted hover:bg-subtle">
+            ↻ Restart
+          </button>
+        )}
+      </div>
+    </section>
+  );
+}
