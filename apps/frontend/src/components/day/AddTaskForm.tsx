@@ -5,6 +5,7 @@ import type { DayResponse } from "@productivity/shared";
 import { api } from "@/lib/api";
 import { errorMessage } from "@/lib/errorMessage";
 import { useNotifications } from "@/components/notifications/NotificationProvider";
+import { HoloButton } from "@/components/common/HoloButton";
 
 interface Props {
   dayId: number;
@@ -70,13 +71,12 @@ export function AddTaskForm({ dayId, minutesOptional, onUpdate }: Props) {
         Break
       </label>
 
-      <button
+      <HoloButton
         type="submit"
         disabled={saving}
-        className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60"
       >
         Add
-      </button>
+      </HoloButton>
     </form>
   );
 }

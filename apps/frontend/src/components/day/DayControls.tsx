@@ -1,11 +1,15 @@
 "use client";
 
+import { useState } from "react";
+import { RotateCcw, TreePalm } from "lucide-react";
 import type { DayResponse } from "@productivity/shared";
 import { REWARDS, deadlineRemainingSeconds, formatSeconds } from "@productivity/shared";
 import { api } from "@/lib/api";
 import { errorMessage } from "@/lib/errorMessage";
 import { formatReward } from "@/lib/rewards";
 import { useNotifications } from "@/components/notifications/NotificationProvider";
+import { EmergencyStopDialog } from "./EmergencyStopDialog";
+import { HoloButton } from "@/components/common/HoloButton";
 
 interface Props {
   data: DayResponse;
@@ -17,8 +21,15 @@ interface Props {
 // The bar at the top: Start / Day off / Pause / Resume / Emergency stop / End day
 export function DayControls({ data, now, isToday, onUpdate }: Props) {
   const { notify } = useNotifications();
-  const { day, status } = data;
+  const [askEmergency, setAskEmergency] = useState(false); // the "are you sure?" box is open
+  const { day, status, profile } = data;
   const dayOffCards = status.inventory.day_off_card ?? 0;
+
+  // No free emergency stops left: show what the next one costs (coins if you have any, otherwise XP).
+  // The server never takes more than you have (floor at 0).
+  const freeStopsLeft = status.emergency_stops_left;
+  const emergencyCost =
+    profile.coins > 0 ? `${-REWARDS.paidEmergencyStop.coins} coins` : `${-REWARDS.paidEmergencyStopNoCoins.xp} XP`;
 
   async function startDay() {
     try {
@@ -40,6 +51,7 @@ export function DayControls({ data, now, isToday, onUpdate }: Props) {
   }
 
   async function pauseDay(type: "pause" | "emergency") {
+    setAskEmergency(false);
     try {
       const res = await api.post<DayResponse>(`/days/${day.id}/pause`, { type });
       onUpdate(res.data);
@@ -90,8 +102,8 @@ export function DayControls({ data, now, isToday, onUpdate }: Props) {
   }
 
   const restartButton = isToday && (
-    <button onClick={restartDay} className="shrink-0 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink hover:bg-subtle">
-      ↻ Restart day
+    <button onClick={restartDay} className="flex shrink-0 items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink hover:bg-subtle">
+      <RotateCcw className="h-4 w-4" aria-hidden /> Restart day
     </button>
   );
 
@@ -110,14 +122,14 @@ export function DayControls({ data, now, isToday, onUpdate }: Props) {
             onClick={takeDayOff}
             disabled={dayOffCards === 0}
             title={dayOffCards === 0 ? "No Day Off cards. Buy one in the Store." : undefined}
-            className="rounded-lg border border-line px-3 py-2 text-sm hover:bg-subtle disabled:opacity-40"
+            className="flex items-center gap-1.5 rounded-lg border border-line px-3 py-2 text-sm hover:bg-subtle disabled:opacity-40"
           >
-            🏖️ Day off ({dayOffCards})
+            <TreePalm className="h-4 w-4" aria-hidden /> Day off ({dayOffCards})
           </button>
           {isToday && (
-            <button onClick={startDay} className="rounded-lg bg-accent px-5 py-2 text-sm font-medium text-white hover:opacity-90">
+            <HoloButton onClick={startDay}>
               Start day
-            </button>
+            </HoloButton>
           )}
         </div>
       </section>
@@ -127,14 +139,17 @@ export function DayControls({ data, now, isToday, onUpdate }: Props) {
   // ----- the day is over (or a day off) -----
   if (day.status !== "active") {
     const summary = {
-      done: { text: "Day complete! Every task finished.", style: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700" },
-      failed: { text: "Day ended with missed tasks.", style: "border-red-500/30 bg-red-500/10 text-red-600" },
+      done: { text: "Day complete! Every task finished.", style: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400" },
+      failed: { text: "Day ended with missed tasks.", style: "border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400" },
       excused: { text: "Day excused (emergency). No penalty.", style: "border-line bg-subtle text-muted" },
-      day_off: { text: "🏖️ Day off. Enjoy your rest. No tasks, no penalties.", style: "border-sky-500/30 bg-sky-500/10 text-sky-700" },
+      day_off: { text: "Day off. Enjoy your rest. No tasks, no penalties.", style: "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-400" },
     }[day.status];
     return (
       <section className={`flex items-center justify-between gap-4 rounded-xl border p-4 text-sm font-medium ${summary.style}`}>
-        <span>{summary.text}</span>
+        <span className="flex items-center gap-2">
+          {day.status === "day_off" && <TreePalm className="h-4 w-4" aria-hidden />}
+          {summary.text}
+        </span>
         {day.status !== "day_off" && restartButton}
       </section>
     );
@@ -152,7 +167,7 @@ export function DayControls({ data, now, isToday, onUpdate }: Props) {
     >
       <div>
         <p className="text-sm font-medium">
-          {isEmergency ? "Emergency stop" : day.paused_at ? "Paused" : "Day in progress"}
+          {isEmergency ? (day.emergency_paid ? "Emergency stop (paid)" : "Emergency stop") : day.paused_at ? "Paused" : "Day in progress"}
           <span className="ml-2 rounded bg-subtle px-1.5 py-0.5 text-xs capitalize text-muted">{day.mode} mode</span>
         </p>
         {deadlineLeft !== null && (
@@ -164,19 +179,21 @@ export function DayControls({ data, now, isToday, onUpdate }: Props) {
 
       <div className="flex gap-2">
         {day.paused_at ? (
-          <button onClick={resumeDay} className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90">
+          <HoloButton onClick={resumeDay}>
             Continue
-          </button>
+          </HoloButton>
         ) : (
           <>
             <button onClick={() => pauseDay("pause")} className="rounded-lg border border-line px-4 py-2 text-sm hover:bg-subtle">
               Pause
             </button>
             <button
-              onClick={() => pauseDay("emergency")}
-              className="rounded-lg border border-red-500/40 px-4 py-2 text-sm text-red-600 hover:bg-red-500/10"
+              onClick={() => setAskEmergency(true)}
+              title={freeStopsLeft > 0 ? `${freeStopsLeft} free left this week` : `No free stops left this week: costs ${emergencyCost}`}
+              className="rounded-lg border border-red-500/40 px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-500/10"
             >
-              Emergency stop
+              Emergency stop{" "}
+              <span className="text-xs opacity-80">({freeStopsLeft > 0 ? `${freeStopsLeft} free` : `costs ${emergencyCost}`})</span>
             </button>
           </>
         )}
@@ -184,11 +201,20 @@ export function DayControls({ data, now, isToday, onUpdate }: Props) {
           End day
         </button>
         {isToday && (
-          <button onClick={restartDay} title="Restart day" className="rounded-lg px-3 py-2 text-sm text-muted hover:bg-subtle">
-            ↻ Restart
+          <button onClick={restartDay} title="Restart day" className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm text-muted hover:bg-subtle">
+            <RotateCcw className="h-4 w-4" aria-hidden /> Restart
           </button>
         )}
       </div>
+
+      {askEmergency && (
+        <EmergencyStopDialog
+          freeStopsLeft={freeStopsLeft}
+          cost={emergencyCost}
+          onConfirm={() => pauseDay("emergency")}
+          onCancel={() => setAskEmergency(false)}
+        />
+      )}
     </section>
   );
 }

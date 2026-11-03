@@ -34,14 +34,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const previousLevel = useRef<number | null>(null);
 
   // Load the profile once when the app opens
+  // (the saved theme is already applied by the script in app/layout.tsx)
   useEffect(() => {
-    try {
-      const savedTheme = localStorage.getItem("theme");
-      if (savedTheme) document.documentElement.dataset.theme = savedTheme;
-    } catch {
-      // storage blocked: ignore
-    }
-
     async function loadPlayer() {
       try {
         const res = await api.get<ProfileResponse>("/me");

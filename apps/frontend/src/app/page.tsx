@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { errorMessage } from "@/lib/errorMessage";
+import { HoloButton } from "@/components/common/HoloButton";
 
 // Landing page. No real login yet, just a button to enter as the demo user.
 export default function HomePage() {
@@ -33,15 +34,15 @@ export default function HomePage() {
           Plan your day, run a timer for every task, and earn discipline points for finishing what you planned.
         </p>
 
-        <button
+        <HoloButton
           onClick={enterDemo}
           disabled={loading}
-          className="mt-6 w-full rounded-lg bg-accent px-4 py-2.5 font-medium text-white hover:opacity-90 disabled:opacity-60"
+          className="mt-6 w-full"
         >
           {loading ? "Entering..." : "Enter demo"}
-        </button>
+        </HoloButton>
 
-        {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+        {error && <p className="mt-3 text-sm text-red-600 dark:text-red-400">{error}</p>}
 
         <p className="mt-4 text-xs text-muted">Real sign-up and login will come later.</p>
       </div>

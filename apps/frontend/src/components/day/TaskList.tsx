@@ -1,11 +1,12 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { Fragment, useRef, useState } from "react";
 import type { BucketSource, DayResponse } from "@productivity/shared";
 import { RULES } from "@productivity/shared";
 import { api } from "@/lib/api";
 import { errorMessage } from "@/lib/errorMessage";
 import { clearDragData, getCurrentDrag, readDragData } from "@/lib/dragData";
+import { useScrollFocus } from "@/lib/scrollFocus";
 import { useNotifications } from "@/components/notifications/NotificationProvider";
 import { TaskRow } from "./TaskRow";
 import { BreakSuggestion } from "./BreakSuggestion";
@@ -16,14 +17,20 @@ interface Props {
   onUpdate: (data: DayResponse) => void;
   // A bucket item was dropped at this spot in the list (0 = first)
   onBucketDrop: (item: { source: BucketSource; id: number }, insertAt: number) => void;
+  onTaskDeleted: () => void;
 }
 
-export function TaskList({ data, now, onUpdate, onBucketDrop }: Props) {
+export function TaskList({ data, now, onUpdate, onBucketDrop, onTaskDeleted }: Props) {
   const { notify } = useNotifications();
   const { day, tasks } = data;
   const [dismissed, setDismissed] = useState<number[]>([]);
   const [dropIndex, setDropIndex] = useState<number | null>(null); // where the drop line is shown
   const [draggingTaskId, setDraggingTaskId] = useState<number | null>(null);
+
+  // Scroll focus effect (lib/scrollFocus.ts): in a long list, the task in focus is full size,
+  // the others a bit smaller and faded. null = the list fits, so every task is full size.
+  const listRef = useRef<HTMLUListElement>(null);
+  const focusedIndex = useScrollFocus(listRef, tasks.length);
 
   const canReorder = day.status === "planning";
   const canAddFromBucket = day.status === "planning" || day.status === "active";
@@ -113,7 +120,10 @@ export function TaskList({ data, now, onUpdate, onBucketDrop }: Props) {
         if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropIndex(null);
       }}
       onDrop={drop}
-      className="flex flex-col gap-2"
+      ref={listRef}
+      // relative: row positions are measured from the top of this list.
+      // max-h + overflow: a long list becomes a scroll box. p-1: room so card shadows aren't cut off.
+      className="relative flex max-h-[60vh] flex-col gap-2 overflow-y-auto p-1 [scrollbar-gutter:stable]"
     >
       {tasks.map((task, index) => (
         <Fragment key={task.id}>
@@ -125,8 +135,10 @@ export function TaskList({ data, now, onUpdate, onBucketDrop }: Props) {
             data={data}
             now={now}
             onUpdate={onUpdate}
+            onDeleted={onTaskDeleted}
             draggable={canReorder}
             isDragging={draggingTaskId === task.id}
+            focusedIndex={focusedIndex}
             onDragStart={() => setDraggingTaskId(task.id)}
             onDragOver={(e) => dragOverRow(e, index)}
             onDragEnd={() => {

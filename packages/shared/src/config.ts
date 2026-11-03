@@ -8,6 +8,10 @@ export const REWARDS = {
   deleteTask: { xp: -10, coins: -10 },
   missTask: { xp: -15, coins: -15 },
   overPausePer10Min: { xp: -2, coins: -2 },
+  // Emergency stop after the free ones this week are used up.
+  // It's never blocked (it's an emergency!), it just costs something:
+  paidEmergencyStop: { xp: 0, coins: -20 }, // takes whatever coins you have, up to 20
+  paidEmergencyStopNoCoins: { xp: -10, coins: 0 }, // with 0 coins it costs XP instead (half the coin price)
 };
 
 export const RULES = {

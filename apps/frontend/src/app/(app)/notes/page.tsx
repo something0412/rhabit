@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ChevronDown, Inbox, Pin } from "lucide-react";
 import type { BucketItem, Note } from "@productivity/shared";
 import { api } from "@/lib/api";
 import { errorMessage } from "@/lib/errorMessage";
@@ -8,7 +9,8 @@ import { isOurDrag, readDragData } from "@/lib/dragData";
 import { localDate } from "@/lib/dates";
 import { useNotifications } from "@/components/notifications/NotificationProvider";
 import { NoteCard } from "@/components/notes/NoteCard";
-import { BucketItemCard } from "@/components/bucket/BucketItemCard";
+import { BucketList } from "@/components/bucket/BucketList";
+import { HoloButton } from "@/components/common/HoloButton";
 
 export default function NotesPage() {
   const { notify } = useNotifications();
@@ -139,9 +141,9 @@ export default function NotesPage() {
                 required
                 className="flex-1 rounded-md border border-line bg-surface px-3 py-2 text-sm"
               />
-              <button type="submit" className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90">
+              <HoloButton type="submit">
                 Add
-              </button>
+              </HoloButton>
             </div>
             <textarea
               value={details}
@@ -187,7 +189,10 @@ export default function NotesPage() {
           )}
         </div>
 
-        {/* ----- right: the to-do bucket, and below it the assigned notes ----- */}
+        {/* ----- right: the to-do bucket, and below it the assigned notes -----
+            Each box has a max height and scrolls inside, so a long list never runs off the screen:
+            bucket = up to 2/3 of the screen, assigned = up to 1/3. (10rem = the page title, page padding and
+            gaps, taken off first so both boxes together fit on the screen even before you scroll.) */}
         <div className="flex flex-col gap-4 @3xl:sticky @3xl:top-6">
           <section
             onDragOver={(e) => {
@@ -199,44 +204,40 @@ export default function NotesPage() {
               if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverBucket(false);
             }}
             onDrop={dropOnBucket}
-            className={`rounded-xl border-2 border-dashed p-3 transition ${
+            className={`flex max-h-[calc((100vh-10rem)*2/3)] flex-col rounded-xl border-2 border-dashed p-3 transition ${
               dragOverBucket ? "border-accent bg-accent-soft" : "border-line bg-surface"
             }`}
           >
-            <h2 className="text-sm font-semibold">🪣 To-do bucket</h2>
+            <h2 className="flex items-center gap-1.5 text-sm font-semibold">
+              <Inbox className="h-4 w-4" aria-hidden /> To-do bucket
+            </h2>
             <p className="mb-3 text-xs text-muted">Drop notes here. Scheduled tasks show up here on their day.</p>
 
             {bucket.length === 0 ? (
               <p className="py-6 text-center text-xs text-muted">Empty. Drag a note here.</p>
             ) : (
-              <ul className="flex flex-col gap-2">
-                {bucket.map((item) => (
-                  <BucketItemCard
-                    key={`${item.source}-${item.id}`}
-                    item={item}
-                    today={localDate()}
-                    onRemove={removeFromBucket}
-                    onDetailsSaved={bucketDetailsSaved}
-                  />
-                ))}
-              </ul>
+              // min-h-0 + flex-1: this part takes the space left in the box and scrolls (the title stays put)
+              <div className="-mr-2 min-h-0 flex-1 overflow-y-auto pr-2 [scrollbar-gutter:stable]">
+                <BucketList items={bucket} today={localDate()} onRemove={removeFromBucket} onDetailsSaved={bucketDetailsSaved} />
+              </div>
             )}
           </section>
 
-          <section className="rounded-xl border border-line bg-surface">
+          <section className="flex max-h-[calc((100vh-10rem)/3)] flex-col rounded-xl border border-line bg-surface">
             <button
               onClick={() => setShowAssigned(!showAssigned)}
               aria-expanded={showAssigned}
               className="flex w-full items-center justify-between px-3 py-2.5 text-left"
             >
-              <span className="text-sm font-semibold">
-                📌 Assigned <span className="font-normal text-muted">({assignedNotes.length})</span>
+              <span className="flex items-center gap-1.5 text-sm font-semibold">
+                <Pin className="h-4 w-4" aria-hidden /> Assigned <span className="font-normal text-muted">({assignedNotes.length})</span>
               </span>
-              <span className={`text-muted transition-transform ${showAssigned ? "rotate-180" : ""}`}>▾</span>
+              <ChevronDown className={`h-4 w-4 text-muted transition-transform ${showAssigned ? "rotate-180" : ""}`} aria-hidden />
             </button>
 
             {showAssigned && (
-              <div className="border-t border-line p-3">
+              // scrolls inside the box; the "Assigned" header stays put
+              <div className="min-h-0 flex-1 overflow-y-auto border-t border-line p-3 [scrollbar-gutter:stable]">
                 <p className="mb-3 text-xs text-muted">
                   Notes already added to a day&apos;s plan. Delete the task from the plan to get the note back.
                 </p>

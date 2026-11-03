@@ -3,7 +3,6 @@ import type { ProfileResponse } from "@productivity/shared";
 import { supabase } from "../supabase";
 import { HttpError } from "../httpError";
 import { getProfile, grantMonthlyDayOff, playerStatus } from "../lib/player";
-import { emergencyStopsLeft } from "../lib/days";
 
 const router = Router();
 
@@ -32,7 +31,6 @@ router.get("/", async (req, res) => {
     status: await playerStatus(profile),
     reward_events: rewardEvents,
     reward_changes: gift ? [gift] : [],
-    emergency_stops_left: await emergencyStopsLeft(req.userId),
     days_off_taken: daysOffTaken ?? 0,
   };
   res.json(body);

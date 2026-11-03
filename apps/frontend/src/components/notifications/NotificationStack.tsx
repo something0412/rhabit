@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
+import { focusLook, useScrollFocus } from "@/lib/scrollFocus";
 import { useNotifications, type NotificationKind } from "./NotificationProvider";
 
 const kindStyles: Record<NotificationKind, string> = {
@@ -23,6 +25,9 @@ const kindDot: Record<NotificationKind, string> = {
 export function NotificationStack() {
   const { notifications, dismiss, clearAll } = useNotifications();
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Same scroll focus effect as the task list (lib/scrollFocus.ts). The column stays scrolled to the
+  // bottom, so the newest notification is in focus and older ones are a bit smaller and faded.
+  const focusedIndex = useScrollFocus(scrollRef, notifications.length);
 
   // When a new notification arrives, scroll to the bottom so it's visible
   useEffect(() => {
@@ -41,13 +46,13 @@ export function NotificationStack() {
         )}
       </div>
 
-      <div ref={scrollRef} className="flex flex-1 flex-col overflow-x-hidden overflow-y-auto px-3 pb-3 [scrollbar-gutter:stable]">
+      <div ref={scrollRef} className="relative flex flex-1 flex-col overflow-x-hidden overflow-y-auto px-3 pb-3 [scrollbar-gutter:stable]">
         {/* mt-auto pushes the whole stack to the bottom of the column */}
         <div className="mt-auto flex flex-col">
           {notifications.length === 0 && <p className="py-6 text-center text-xs text-muted">No notifications yet</p>}
 
           <AnimatePresence initial={false}>
-            {notifications.map((n) => (
+            {notifications.map((n, index) => (
               // The outer "slot" grows from 0 to the card's height, which smoothly pushes the older
               // notifications up. It clips its contents, so the sliding card can never stick out
               // of the column (that's what used to make scrollbars flash).
@@ -58,10 +63,11 @@ export function NotificationStack() {
                 exit={{ height: 0, opacity: 0 }}
                 transition={{ duration: 0.28, ease: "easeOut" }}
                 className="shrink-0 overflow-hidden"
+                data-focus-index={index} // the column uses this to find which notification is in focus
               >
                 <motion.div
                   initial={{ y: 40 }} // the new card starts a bit lower...
-                  animate={{ y: 0 }} // ...and slides up into its slot
+                  animate={{ y: 0, ...focusLook(index, focusedIndex) }} // ...and slides up into its slot
                   exit={{ x: 120 }} // a dismissed card slides out to the right
                   transition={{ type: "spring", stiffness: 380, damping: 32 }}
                   className={`mt-2 rounded-lg border border-l-4 border-line bg-surface p-3 shadow-sm ${kindStyles[n.kind]}`}
@@ -94,7 +100,7 @@ export function NotificationStack() {
                       </p>
                     </div>
                     <button onClick={() => dismiss(n.id)} className="text-muted hover:text-ink" aria-label="Dismiss notification">
-                      ×
+                      <X className="h-4 w-4" aria-hidden />
                     </button>
                   </div>
                 </motion.div>

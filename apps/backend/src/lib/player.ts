@@ -41,7 +41,20 @@ export async function missedThisWeek(userId: string, today: string): Promise<num
   return count ?? 0;
 }
 
-// Level, flexible-mode status and inventory: things we CALCULATE, not store.
+// Free emergency stops left: the weekly allowance minus the ones used in the last 7 days
+export async function emergencyStopsLeft(userId: string): Promise<number> {
+  const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const { count, error } = await supabase
+    .from("pause_events")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("type", "emergency")
+    .gte("started_at", oneWeekAgo);
+  if (error) throw error;
+  return Math.max(0, RULES.emergencyStopsPerWeek - (count ?? 0));
+}
+
+// Level, flexible-mode status, inventory and emergency stops: things we CALCULATE, not store.
 export async function playerStatus(profile: Profile): Promise<PlayerStatus> {
   const level = levelInfo(profile.xp);
   const missed = await missedThisWeek(profile.id, todayIn(profile.timezone));
@@ -56,6 +69,7 @@ export async function playerStatus(profile: Profile): Promise<PlayerStatus> {
       bad_week: badWeek,
     },
     inventory: await getInventory(profile.id),
+    emergency_stops_left: await emergencyStopsLeft(profile.id),
   };
 }
 

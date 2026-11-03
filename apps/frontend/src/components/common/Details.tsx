@@ -3,20 +3,19 @@
 import { useState } from "react";
 
 // The little arrow that opens/closes a task's details.
-// Shows a dot when there are details, so you know there's something inside.
-export function DetailsArrow({ open, hasDetails, onToggle }: { open: boolean; hasDetails: boolean; onToggle: () => void }) {
+// (No "has details" dot on purpose: it annoyed users. Tasks show a short preview of their details instead.)
+export function DetailsArrow({ open, onToggle }: { open: boolean; onToggle: () => void }) {
   return (
     <button
       type="button"
       onClick={onToggle}
       aria-label={open ? "Hide details" : "Show details"}
       aria-expanded={open}
-      className="relative flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted hover:bg-subtle hover:text-ink"
+      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted hover:bg-subtle hover:text-ink"
     >
       <svg viewBox="0 0 20 20" className={`h-4 w-4 transition-transform ${open ? "rotate-90" : ""}`} fill="currentColor">
         <path d="M7 5l6 5-6 5V5z" />
       </svg>
-      {hasDetails && !open && <span className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-accent" />}
     </button>
   );
 }

@@ -10,15 +10,15 @@ export interface StoreItem {
   name: string;
   description: string;
   price: number; // 0 = free, owned by everyone
-  icon: string; // emoji for cards/characters, a color for themes
+  icon: string; // cards: a Lucide icon name (see CardIcon.tsx), characters: an emoji, themes: a color
 }
 
 export const STORE_ITEMS: StoreItem[] = [
   // ----- cards -----
-  { id: "day_off_card", kind: "card", name: "Day Off card", description: "Take a whole day off. No penalties, no reminders.", price: 60, icon: "🏖️" },
-  { id: "flexible_card", kind: "card", name: "Flexible Day card", description: "Use flexible mode for one day, even while it's locked.", price: 40, icon: "🌀" },
-  { id: "delete_card", kind: "card", name: "Delete card", description: "Delete a task after the day starts without losing XP or coins.", price: 15, icon: "🗑️" },
-  { id: "pause_card", kind: "card", name: "Pause Pack", description: "+30 min of free pause time. Used automatically when you go over.", price: 15, icon: "⏸️" },
+  { id: "day_off_card", kind: "card", name: "Day Off card", description: "Take a whole day off. No penalties, no reminders.", price: 60, icon: "tree-palm" },
+  { id: "flexible_card", kind: "card", name: "Flexible Day card", description: "Use flexible mode for one day, even while it's locked.", price: 40, icon: "waves" },
+  { id: "delete_card", kind: "card", name: "Delete card", description: "Delete a task after the day starts without losing XP or coins.", price: 15, icon: "trash-2" },
+  { id: "pause_card", kind: "card", name: "Pause Pack", description: "+30 min of free pause time. Used automatically when you go over.", price: 15, icon: "pause" },
 
   // ----- themes -----
   { id: "theme_classic", kind: "theme", name: "Classic", description: "Clean and bright.", price: 0, icon: "#4f46e5" },

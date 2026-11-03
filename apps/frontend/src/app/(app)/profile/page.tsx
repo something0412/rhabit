@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { CardIcon } from "@/components/common/CardIcon";
+import { Lock } from "lucide-react";
 import type { Profile, ProfileResponse } from "@productivity/shared";
 import { RULES, STORE_ITEMS } from "@productivity/shared";
 import { api } from "@/lib/api";
@@ -8,6 +10,8 @@ import { errorMessage } from "@/lib/errorMessage";
 import { formatReward } from "@/lib/rewards";
 import { useNotifications } from "@/components/notifications/NotificationProvider";
 import { usePlayer } from "@/components/player/PlayerProvider";
+import { HoloButton } from "@/components/common/HoloButton";
+import { TimePicker } from "@/components/common/TimePicker";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -74,11 +78,11 @@ export default function ProfilePage() {
   }
 
   if (loadError) {
-    return <p className="m-6 rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-600">{loadError}</p>;
+    return <p className="m-6 rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-600 dark:text-red-400">{loadError}</p>;
   }
   if (!data) return <p className="p-6 text-sm text-muted">Loading...</p>;
 
-  const { profile, status, reward_events, emergency_stops_left, days_off_taken } = data;
+  const { profile, status, reward_events, days_off_taken } = data;
   const cards = STORE_ITEMS.filter((item) => item.kind === "card");
 
   return (
@@ -99,7 +103,7 @@ export default function ProfilePage() {
         </div>
         <div className="rounded-xl border border-line bg-surface p-4">
           <p className="text-xs text-muted">Coins</p>
-          <p className="mt-1 text-3xl font-semibold text-amber-600">🪙 {profile.coins}</p>
+          <p className="mt-1 text-3xl font-semibold text-amber-600 dark:text-amber-400">🪙 {profile.coins}</p>
         </div>
         <div className="rounded-xl border border-line bg-surface p-4">
           <p className="text-xs text-muted">Days off</p>
@@ -108,14 +112,17 @@ export default function ProfilePage() {
         </div>
         <div className="rounded-xl border border-line bg-surface p-4">
           <p className="text-xs text-muted">Emergency stops</p>
-          <p className="mt-1 text-3xl font-semibold">{emergency_stops_left}</p>
+          <p className="mt-1 text-3xl font-semibold">{status.emergency_stops_left}</p>
           <p className="text-[11px] text-muted">left this week (of {RULES.emergencyStopsPerWeek})</p>
         </div>
       </section>
 
       {/* ----- flexible mode ----- */}
       <section className="rounded-xl border border-line bg-surface p-4 text-sm">
-        <p className="font-medium">Flexible mode: {status.flexible.unlocked ? "Unlocked" : "Locked 🔒"}</p>
+        <p className="flex items-center gap-1.5 font-medium">
+          Flexible mode: {status.flexible.unlocked ? "Unlocked" : "Locked"}
+          {!status.flexible.unlocked && <Lock className="h-3.5 w-3.5" aria-hidden />}
+        </p>
         <p className="mt-1 text-xs text-muted">
           Unlocks at Level {status.flexible.level_needed}, and locks again while you have {RULES.badWeekMissedTasks}+ missed
           tasks in the last 7 days (you have {status.flexible.missed_this_week}). A Flexible Day card works even while it's
@@ -129,9 +136,7 @@ export default function ProfilePage() {
         <div className="mt-3 grid grid-cols-2 gap-2 @2xl:grid-cols-4">
           {cards.map((card) => (
             <div key={card.id} className="flex items-center gap-2 rounded-lg bg-subtle p-2">
-              <span className="text-xl" aria-hidden>
-                {card.icon}
-              </span>
+              <CardIcon name={card.icon} className="h-5 w-5 shrink-0 text-accent-ink" />
               <div>
                 <p className="text-xs font-medium">{card.name}</p>
                 <p className="text-xs text-muted">x {status.inventory[card.id] ?? 0}</p>
@@ -151,9 +156,9 @@ export default function ProfilePage() {
             className="rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink"
           />
         </label>
-        <button type="submit" className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90">
+        <HoloButton type="submit">
           Save
-        </button>
+        </HoloButton>
       </form>
 
       {/* ----- work hours ----- */}
@@ -165,24 +170,14 @@ export default function ProfilePage() {
         </p>
 
         <div className="mt-3 flex flex-wrap items-end gap-4">
-          <label className="flex flex-col gap-1 text-xs text-muted">
+          <div className="flex flex-col gap-1 text-xs text-muted">
             From
-            <input
-              type="time"
-              value={workStart}
-              onChange={(e) => setWorkStart(e.target.value)}
-              className="rounded-md border border-line bg-surface px-2 py-1.5 text-sm text-ink"
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-xs text-muted">
+            <TimePicker value={workStart} onChange={setWorkStart} minuteStep={5} ariaLabel="Work starts" />
+          </div>
+          <div className="flex flex-col gap-1 text-xs text-muted">
             To
-            <input
-              type="time"
-              value={workEnd}
-              onChange={(e) => setWorkEnd(e.target.value)}
-              className="rounded-md border border-line bg-surface px-2 py-1.5 text-sm text-ink"
-            />
-          </label>
+            <TimePicker value={workEnd} onChange={setWorkEnd} minuteStep={5} ariaLabel="Work ends" />
+          </div>
 
           <div className="flex flex-col gap-1 text-xs text-muted">
             Days
@@ -202,9 +197,9 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          <button type="submit" className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90">
+          <HoloButton type="submit">
             Save hours
-          </button>
+          </HoloButton>
         </div>
       </form>
 
@@ -225,7 +220,7 @@ export default function ProfilePage() {
                     <p className="text-xs text-muted">{new Date(event.created_at).toLocaleString()}</p>
                   </div>
                   {amount && (
-                    <span className={`shrink-0 font-medium ${gained ? "text-emerald-600" : "text-red-600"}`}>{amount}</span>
+                    <span className={`shrink-0 font-medium ${gained ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>{amount}</span>
                   )}
                 </li>
               );

@@ -7,7 +7,18 @@
     bg-page, bg-surface, bg-subtle, border-line, text-ink, text-muted,
     bg-accent, bg-accent-soft, text-accent-ink
   The active theme is set on <html data-theme="theme_ocean"> (see PlayerProvider).
+
+  LIGHT / DARK
+  The sidebar's sun/moon button sets <html data-mode="dark">. Every theme has a light AND a dark
+  color set below. Midnight is always dark, so it ignores the button.
 */
+
+/* "collapsed:" classes (e.g. collapsed:hidden) apply while the sidebar is collapsed to icons only.
+   The sidebar's < > button sets <html data-sidebar="collapsed"> (see components/Sidebar.tsx). */
+@custom-variant collapsed (&:where([data-sidebar="collapsed"] *));
+
+/* "dark:" classes (e.g. dark:text-red-400) apply in dark mode and in the Midnight theme */
+@custom-variant dark (&:where([data-mode="dark"], [data-mode="dark"] *, [data-theme="theme_midnight"], [data-theme="theme_midnight"] *));
 @theme inline {
   --color-page: var(--page);
   --color-surface: var(--surface);
@@ -70,6 +81,7 @@
 }
 
 [data-theme="theme_midnight"] {
+  color-scheme: dark; /* dark scrollbars, date pickers, etc. */
   --page: #0f1220;
   --surface: #171b2e;
   --subtle: #1f2440;
@@ -81,9 +93,158 @@
   --accent-ink: #a5b4fc;
 }
 
+/* ----- dark versions (data-mode="dark"). Same accent color as the light version, dark grays. ----- */
+
+[data-mode="dark"]:not([data-theme]),
+[data-mode="dark"][data-theme="theme_classic"] {
+  color-scheme: dark;
+  --page: #111318;
+  --surface: #1a1d24;
+  --subtle: #232731;
+  --line: #2e3340;
+  --ink: #e7e9ee;
+  --muted: #9ca3af;
+  --accent: #6366f1;
+  --accent-soft: #262a45;
+  --accent-ink: #a5b4fc;
+}
+
+[data-mode="dark"][data-theme="theme_ocean"] {
+  color-scheme: dark;
+  --page: #0c1719;
+  --surface: #122125;
+  --subtle: #182b30;
+  --line: #22393f;
+  --ink: #e2f0f3;
+  --muted: #8fa9b1;
+  --accent: #0891b2;
+  --accent-soft: #123139;
+  --accent-ink: #67d3eb;
+}
+
+[data-mode="dark"][data-theme="theme_forest"] {
+  color-scheme: dark;
+  --page: #0f1510;
+  --surface: #161f17;
+  --subtle: #1d281e;
+  --line: #29372a;
+  --ink: #e4eee4;
+  --muted: #95a795;
+  --accent: #16a34a;
+  --accent-soft: #19301f;
+  --accent-ink: #6ee396;
+}
+
+[data-mode="dark"][data-theme="theme_sunset"] {
+  color-scheme: dark;
+  --page: #18110e;
+  --surface: #221814;
+  --subtle: #2c1f1a;
+  --line: #3b2a23;
+  --ink: #f5e9e3;
+  --muted: #b39a8f;
+  --accent: #ea580c;
+  --accent-soft: #3a2117;
+  --accent-ink: #fdba74;
+}
+
 body {
   background: var(--page);
   color: var(--ink);
+}
+
+/*
+  LIGHT/DARK SWITCH EFFECT ("flip-x-in", from a reUI theme toggle)
+  ModeToggle uses the browser's View Transitions: it takes a picture of the page, switches the colors,
+  then animates old picture -> new picture. While it runs, <html data-switching="flip"> is set,
+  so these rules only apply to this switch (not to other page changes).
+  The old look turns away like a card (0 -> -90deg) and the new look turns in (90deg -> 0).
+*/
+:root[data-switching="flip"]::view-transition-group(root) {
+  perspective: 1000px;
+}
+:root[data-switching="flip"]::view-transition-old(root) {
+  transform-origin: center;
+  animation: flip-out 400ms forwards;
+}
+:root[data-switching="flip"]::view-transition-new(root) {
+  transform-origin: center;
+  animation: flip-in 400ms forwards;
+}
+@keyframes flip-out {
+  from {
+    transform: rotateY(0deg);
+    opacity: 1;
+  }
+  to {
+    transform: rotateY(-90deg);
+    opacity: 0;
+  }
+}
+@keyframes flip-in {
+  from {
+    transform: rotateY(90deg);
+    opacity: 0;
+  }
+  to {
+    transform: rotateY(0deg);
+    opacity: 1;
+  }
+}
+
+/*
+  HOLO BUTTON (components/common/HoloButton.tsx)
+  The spinning gradient behind the button's border. --beam-duration is set by the button
+  (slower normally, faster on hover). People who turned on "reduce motion" get no spin.
+*/
+
+/* Each theme's holo colors (same in light and dark mode), taken from the Lightswind variants:
+   --holo-beam  = the spinning border's rainbow, --holo-flare = the glow that follows the mouse (half the original strength) */
+:root,
+[data-theme="theme_classic"],
+[data-theme="theme_midnight"] {
+  /* Lightswind "Primary" */
+  --holo-beam: linear-gradient(90deg, #818cf8, #f472b6, #c084fc);
+  --holo-flare: radial-gradient(circle, rgb(99 102 241 / 0.1) 0%, rgb(236 72 153 / 0.1) 55%, transparent 100%);
+}
+[data-theme="theme_ocean"] {
+  /* Lightswind "Cyberpunk" */
+  --holo-beam: linear-gradient(90deg, #06b6d4, #c084fc, #eab308);
+  --holo-flare: radial-gradient(circle, rgb(34 211 238 / 0.1) 0%, rgb(168 85 247 / 0.1) 50%, transparent 100%);
+}
+[data-theme="theme_forest"] {
+  --holo-beam: linear-gradient(90deg, #22c55e, #14b8a6, #a3e635);
+  --holo-flare: radial-gradient(circle, rgb(34 197 94 / 0.1) 0%, rgb(20 184 166 / 0.1) 55%, transparent 100%);
+}
+[data-theme="theme_sunset"] {
+  /* Lightswind "Rose Gold" */
+  --holo-beam: linear-gradient(90deg, #fb7185, #fdba74, #fb7185);
+  --holo-flare: radial-gradient(circle, rgb(251 113 133 / 0.1) 0%, rgb(253 186 116 / 0.09) 60%, transparent 100%);
+}
+
+/* The glow tints the button: "multiply" darkens a little on light buttons, "screen" lightens on dark ones */
+:root {
+  --holo-blend: multiply;
+}
+[data-mode="dark"],
+[data-theme="theme_midnight"] {
+  --holo-blend: screen;
+}
+
+@keyframes holo-beam-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.holo-beam {
+  animation: holo-beam-rotate var(--beam-duration, 5s) linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .holo-beam {
+    animation: none;
+  }
 }
 
 /*

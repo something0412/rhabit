@@ -20,3 +20,5 @@ next-env.d.ts
 
 # local demo database (used when there are no Supabase keys)
 .local-db.json
+
+CLAUDE.md

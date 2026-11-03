@@ -1,20 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { motion } from "motion/react";
+import { Check, Coffee, GripVertical, Pencil, Timer, X } from "lucide-react";
 import type { DayResponse, Task, TaskStatus } from "@productivity/shared";
 import { REWARDS, formatSeconds, taskRemainingSeconds } from "@productivity/shared";
 import { api } from "@/lib/api";
 import { errorMessage } from "@/lib/errorMessage";
 import { formatReward } from "@/lib/rewards";
 import { setDragData } from "@/lib/dragData";
+import { focusLook } from "@/lib/scrollFocus";
 import { useNotifications } from "@/components/notifications/NotificationProvider";
 import { DetailsArrow, DetailsBox } from "@/components/common/Details";
+import { HoloButton } from "@/components/common/HoloButton";
 
-const statusStyles: Record<TaskStatus, string> = {
+// Colors of the icon box on the left of each task
+const badgeStyles: Record<TaskStatus, string> = {
   planned: "bg-subtle text-muted",
   running: "bg-accent-soft text-accent-ink",
-  completed: "bg-emerald-500/15 text-emerald-700",
-  missed: "bg-red-500/15 text-red-600",
+  completed: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
+  missed: "bg-red-500/15 text-red-600 dark:text-red-400",
   deleted: "bg-subtle text-muted",
 };
 
@@ -27,18 +32,26 @@ interface Props {
   // drag to reorder (only while planning)
   draggable: boolean;
   isDragging: boolean;
+  focusedIndex: number | null; // which task the scroll focus is on (null = the list doesn't scroll)
   onDragStart: () => void;
   onDragOver: (event: React.DragEvent) => void;
   onDragEnd: () => void;
+  onDeleted: () => void; // a task was deleted (the Main page reloads the bucket: the task may go back there)
 }
 
-export function TaskRow({ task, index, data, now, onUpdate, draggable, isDragging, onDragStart, onDragOver, onDragEnd }: Props) {
+export function TaskRow({ task, index, data, now, onUpdate, draggable, isDragging, focusedIndex, onDragStart, onDragOver, onDragEnd, onDeleted }: Props) {
   const { notify } = useNotifications();
   const { day } = data;
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(task.title);
   const [minutes, setMinutes] = useState(String(task.duration_minutes ?? "")); // "" = no time set
   const [showDetails, setShowDetails] = useState(false);
+  const rowRef = useRef<HTMLLIElement>(null); // the whole card (used as the picture while dragging)
+  // A task that just started (timer mode) scrolls into view, so it's never faded at the edge
+  useEffect(() => {
+    if (task.status === "running") rowRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [task.status]);
+
   const minutesOptional = day.mode !== "timer"; // only timer mode needs minutes
 
   const isPlanning = day.status === "planning";
@@ -91,6 +104,7 @@ export function TaskRow({ task, index, data, now, onUpdate, draggable, isDraggin
     try {
       const res = await api.delete<DayResponse>(`/tasks/${task.id}`, { params: { use_card: useCard } });
       onUpdate(res.data);
+      onDeleted();
     } catch (error) {
       notify("danger", "Couldn't delete task", errorMessage(error));
     }
@@ -109,7 +123,7 @@ export function TaskRow({ task, index, data, now, onUpdate, draggable, isDraggin
   // ----- edit mode -----
   if (editing) {
     return (
-      <li onDragOver={onDragOver} className="flex flex-wrap items-center gap-2 rounded-lg border border-accent bg-surface p-3">
+      <li onDragOver={onDragOver} className="flex flex-wrap items-center gap-2 rounded-xl border border-accent bg-surface px-4 py-3 shadow-sm">
         <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
@@ -126,9 +140,9 @@ export function TaskRow({ task, index, data, now, onUpdate, draggable, isDraggin
           className="w-20 rounded-md border border-line px-2 py-1 text-sm"
         />
         <span className="text-xs text-muted">min</span>
-        <button onClick={saveEdit} className="rounded-md bg-accent px-3 py-1 text-sm text-white">
+        <HoloButton onClick={saveEdit} size="sm">
           Save
-        </button>
+        </HoloButton>
         <button onClick={() => setEditing(false)} className="rounded-md px-3 py-1 text-sm text-muted">
           Cancel
         </button>
@@ -141,60 +155,120 @@ export function TaskRow({ task, index, data, now, onUpdate, draggable, isDraggin
   const remaining = taskRemainingSeconds(task, day, now);
   const progress = 1 - remaining / ((task.duration_minutes ?? 1) * 60);
 
+  // The small box on the left: the task's number while it waits, otherwise an icon for its status
+  const badge = task.is_break ? (
+    <Coffee className="h-4 w-4" />
+  ) : task.status === "completed" ? (
+    <Check className="h-4 w-4" />
+  ) : task.status === "missed" ? (
+    <X className="h-4 w-4" />
+  ) : task.status === "running" ? (
+    <Timer className="h-4 w-4" />
+  ) : (
+    <span className="text-xs font-medium">{index + 1}</span>
+  );
+
+  // Scroll focus effect: the focused task is full size, neighbors almost, the rest a bit smaller and faded
+  const look = focusLook(index, focusedIndex);
+
   return (
-    <li
-      draggable={draggable && !showDetails}
-      onDragStart={(e) => {
-        setDragData(e, { kind: "task", id: task.id });
-        onDragStart();
-      }}
+    // motion.li = a normal <li> that can animate:
+    //  - initial/animate: a new task fades and slides in
+    //  - layout: after reordering, tasks glide to their new spot instead of jumping
+    <motion.li
+      ref={rowRef}
+      layout="position"
+      initial={{ opacity: 0, y: -8, scale: 0.98 }}
+      animate={{ opacity: isDragging ? 0.4 : look.opacity, y: 0, scale: look.scale }}
+      data-focus-index={index} // the list uses this to find which task is in focus
+      transition={{ type: "spring", stiffness: 350, damping: 30 }}
       onDragOver={onDragOver}
-      onDragEnd={onDragEnd}
-      className={`rounded-lg border bg-surface p-3 transition-opacity ${
-        task.status === "running" ? "border-accent shadow-sm" : "border-line"
-      } ${task.is_break ? "bg-sky-500/10" : ""} ${draggable && !showDetails ? "cursor-grab active:cursor-grabbing" : ""} ${
-        isDragging ? "opacity-40" : ""
-      }`}
+      className={`rounded-xl border px-4 py-3 shadow-sm transition-shadow hover:shadow-md ${
+        task.status === "running" ? "border-accent" : "border-line"
+      } ${task.is_break ? "bg-sky-500/10" : "bg-surface"}`}
     >
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-3">
+        {/* Drag handle: only this part starts a drag, so clicking buttons never drags by accident */}
         {draggable && (
-          <span aria-hidden title="Drag to reorder" className="select-none text-muted">
-            ⋮⋮
+          <span
+            draggable
+            onDragStart={(e) => {
+              setDragData(e, { kind: "task", id: task.id });
+              // Show the whole card under the mouse while dragging, not just the little handle
+              if (rowRef.current) {
+                const box = rowRef.current.getBoundingClientRect();
+                e.dataTransfer.setDragImage(rowRef.current, e.clientX - box.left, e.clientY - box.top);
+              }
+              onDragStart();
+            }}
+            onDragEnd={onDragEnd}
+            title="Drag to reorder"
+            className="shrink-0 cursor-grab text-muted/40 transition-colors hover:text-muted active:cursor-grabbing"
+          >
+            <GripVertical className="h-4 w-4" />
           </span>
         )}
-        <DetailsArrow open={showDetails} hasDetails={task.details !== ""} onToggle={() => setShowDetails(!showDetails)} />
-        <span className="w-4 text-center text-xs text-muted">{index + 1}</span>
+
+        <span
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+            task.is_break ? "bg-sky-500/15 text-sky-600 dark:text-sky-400" : badgeStyles[task.status]
+          }`}
+        >
+          {badge}
+        </span>
 
         <div className="min-w-0 flex-1">
-          <p className={`text-sm font-medium ${task.status === "completed" ? "text-muted line-through" : ""}`}>
+          <p className={`truncate text-sm font-medium ${task.status === "completed" ? "text-muted line-through" : ""}`}>
             {task.title}
-            {task.is_break && <span className="ml-2 text-xs font-normal text-sky-600">break</span>}
+            {task.is_break && <span className="ml-2 text-xs font-normal text-sky-600 dark:text-sky-400">break</span>}
           </p>
-          <p className="text-xs text-muted">
+          <p className="mt-0.5 text-xs text-muted">
             {task.duration_minutes !== null ? `${task.duration_minutes} min` : "No time set"}
+            {task.status !== "planned" && <span className="capitalize"> · {task.status}</span>}
           </p>
+
+          {/* A preview of the details, then "..." if there's more:
+              1 line on a landscape screen (desktop), 2 lines on a portrait screen (phone held upright).
+              Clicking it opens the full details below, same as the arrow. */}
+          {task.details !== "" && !showDetails && (
+            <button
+              type="button"
+              onClick={() => setShowDetails(true)}
+              title="Show all details"
+              className="mt-1 block w-full text-left"
+            >
+              <p className="line-clamp-1 text-xs portrait:line-clamp-2 whitespace-pre-line text-muted/80 hover:text-muted">{task.details}</p>
+            </button>
+          )}
         </div>
 
         {showTimer && <span className="font-mono text-lg text-accent-ink">{formatSeconds(remaining)}</span>}
 
-        <span className={`rounded px-2 py-0.5 text-xs capitalize ${statusStyles[task.status]}`}>{task.status}</span>
+        <DetailsArrow open={showDetails} onToggle={() => setShowDetails(!showDetails)} />
 
         <div className="flex items-center gap-1">
           {canComplete && (
-            <button
-              onClick={completeTask}
-              className="rounded-md bg-emerald-600 px-3 py-1 text-xs font-medium text-white hover:bg-emerald-700"
-            >
+            <HoloButton onClick={completeTask} size="sm" tone="success">
               Done
-            </button>
+            </HoloButton>
           )}
           {(isPlanning || isActive) && isOpen && (
             <>
-              <button onClick={startEditing} className="rounded-md px-2 py-1 text-xs text-muted hover:bg-subtle">
-                Edit
+              <button
+                onClick={startEditing}
+                aria-label={`Edit ${task.title}`}
+                title="Edit"
+                className="flex h-6 w-6 items-center justify-center rounded-full text-muted/60 transition-colors hover:bg-subtle hover:text-ink"
+              >
+                <Pencil className="h-3.5 w-3.5" />
               </button>
-              <button onClick={deleteTask} className="rounded-md px-2 py-1 text-xs text-red-600 hover:bg-red-500/10">
-                Delete
+              <button
+                onClick={deleteTask}
+                aria-label={`Delete ${task.title}`}
+                title="Delete"
+                className="flex h-6 w-6 items-center justify-center rounded-full text-muted/60 transition-colors hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400"
+              >
+                <X className="h-3.5 w-3.5" />
               </button>
             </>
           )}
@@ -208,6 +282,6 @@ export function TaskRow({ task, index, data, now, onUpdate, draggable, isDraggin
       )}
 
       {showDetails && <DetailsBox value={task.details} onSave={saveDetails} />}
-    </li>
+    </motion.li>
   );
 }

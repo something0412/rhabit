@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Check, X } from "lucide-react";
 import type { ScheduledStatus, ScheduledTask } from "@productivity/shared";
 import { api } from "@/lib/api";
 import { errorMessage } from "@/lib/errorMessage";
@@ -8,8 +9,9 @@ import { prettyTime } from "@/lib/dates";
 import { useNotifications } from "@/components/notifications/NotificationProvider";
 import { DetailsArrow, DetailsBox } from "@/components/common/Details";
 
-// Sticky-note paper colors (the card picks one by its id, so it always keeps the same color)
-const PAPER = [
+// Sticky-note paper colors (the card picks one by its id, so it always keeps the same color).
+// Exported so the calendar can color each task's dot to match its note.
+export const PAPER = [
   { paper: "#fef3a0", header: "#f6e05e" }, // yellow
   { paper: "#fbd5e3", header: "#f5a8c5" }, // pink
   { paper: "#cfe8fb", header: "#9fd0f5" }, // blue
@@ -22,7 +24,7 @@ const TILT = ["-rotate-2", "rotate-1", "-rotate-1", "rotate-2", "rotate-0"];
 
 const statusLabels: Record<ScheduledStatus, string> = {
   scheduled: "Scheduled",
-  added: "✓ Added to plan",
+  added: "Added to plan",
   dismissed: "Ignored",
 };
 
@@ -106,15 +108,18 @@ export function ScheduledNote({ task, today, onChanged, onDeleted }: Props) {
 
         <div className="mt-auto flex items-center justify-between pt-2">
           <div className="flex items-center gap-1">
-            <DetailsArrow open={showDetails} hasDetails={task.details !== ""} onToggle={() => setShowDetails(!showDetails)} />
-            <span className="text-[11px] font-medium text-muted">{statusLabels[task.status]}</span>
+            <DetailsArrow open={showDetails} onToggle={() => setShowDetails(!showDetails)} />
+            <span className="flex items-center gap-1 text-[11px] font-medium text-muted">
+              {task.status === "added" && <Check className="h-3 w-3" aria-hidden />}
+              {statusLabels[task.status]}
+            </span>
           </div>
           <button
             onClick={deleteTask}
             aria-label={`Delete ${task.title}`}
             className="rounded px-1.5 text-lg leading-none text-muted opacity-0 transition group-hover:opacity-100 hover:text-red-700 focus:opacity-100"
           >
-            ×
+            <X className="h-4 w-4" aria-hidden />
           </button>
         </div>
       </div>

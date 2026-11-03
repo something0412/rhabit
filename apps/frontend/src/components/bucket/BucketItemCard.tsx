@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { CalendarDays, StickyNote, X } from "lucide-react";
 import type { BucketItem } from "@productivity/shared";
 import { api } from "@/lib/api";
 import { errorMessage } from "@/lib/errorMessage";
@@ -44,11 +45,12 @@ export function BucketItemCard({ item, today, onRemove, onDetailsSaved }: Props)
       className="cursor-grab rounded-lg border border-line bg-surface p-2.5 shadow-sm active:cursor-grabbing"
     >
       <div className="flex items-center gap-2">
-        <DetailsArrow open={showDetails} hasDetails={item.details !== ""} onToggle={() => setShowDetails(!showDetails)} />
+        <DetailsArrow open={showDetails} onToggle={() => setShowDetails(!showDetails)} />
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium">{item.title}</p>
-          <p className="text-[11px] text-muted">
-            {isScheduled ? "📅 Scheduled" : "📝 Note"}
+          <p className="flex items-center gap-1 text-[11px] text-muted">
+            {isScheduled ? <CalendarDays className="h-3 w-3" aria-hidden /> : <StickyNote className="h-3 w-3" aria-hidden />}
+            {isScheduled ? "Scheduled" : "Note"}
             {item.time && ` · ${prettyTime(item.time)}`}
             {item.duration_minutes && ` · ${item.duration_minutes} min`}
             {item.date && item.date < today && ` · from ${prettyDate(item.date)}`}
@@ -60,7 +62,7 @@ export function BucketItemCard({ item, today, onRemove, onDetailsSaved }: Props)
           aria-label="Remove from bucket"
           className="rounded-md px-1.5 text-muted hover:bg-subtle hover:text-ink"
         >
-          ×
+          <X className="h-3.5 w-3.5" aria-hidden />
         </button>
       </div>
 

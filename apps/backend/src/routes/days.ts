@@ -1,11 +1,11 @@
 import { Router } from "express";
 import type { DayMode, RewardEvent } from "@productivity/shared";
-import { RULES } from "@productivity/shared";
+import { REWARDS, RULES } from "@productivity/shared";
 import { supabase } from "../supabase";
 import { HttpError, parseId } from "../httpError";
 import { addDays, nowIso, todayIn } from "../lib/dates";
 import { addItem, useItem } from "../lib/inventory";
-import { getProfile, grantMonthlyDayOff, playerStatus } from "../lib/player";
+import { emergencyStopsLeft, getProfile, grantMonthlyDayOff, playerStatus } from "../lib/player";
 import { addNote, changeRewards } from "../lib/rewards";
 import {
   addTaskToDay,
@@ -13,7 +13,6 @@ import {
   closeOldDays,
   closePauseEvents,
   dayResponse,
-  emergencyStopsLeft,
   endPause,
   finishDay,
   getDay,
@@ -204,6 +203,7 @@ router.post("/:id/restart", async (req, res) => {
     regular_paused_seconds: 0,
     bonus_pause_seconds: 0,
     flexible_card_used: false,
+    emergency_paid: false,
   });
 
   res.json(await dayResponse(req.userId, day.id, changes));
@@ -227,8 +227,15 @@ router.post("/:id/pause", async (req, res) => {
     return;
   }
 
+  // No free emergency stops left this week? It still works (it's an emergency), but it costs:
+  // coins if you have any (up to the price), otherwise XP.
+  // It's linked to the day, so "Restart day" gives it back like every other reward change.
+  let emergencyPaid = false;
   if (type === "emergency" && (await emergencyStopsLeft(req.userId)) <= 0) {
-    throw new HttpError(400, `You've used all ${RULES.emergencyStopsPerWeek} emergency stops this week`);
+    const profile = await getProfile(req.userId);
+    const cost = profile.coins > 0 ? REWARDS.paidEmergencyStop : REWARDS.paidEmergencyStopNoCoins;
+    record(changes, await changeRewards(req.userId, cost, "Paid emergency stop (no free stops left this week)", dayId));
+    emergencyPaid = true;
   }
 
   const now = nowIso();
@@ -237,7 +244,7 @@ router.post("/:id/pause", async (req, res) => {
     .insert({ user_id: req.userId, day_plan_id: dayId, type, started_at: now });
   if (error) throw error;
 
-  await updateDay(dayId, { paused_at: now, pause_type: type });
+  await updateDay(dayId, { paused_at: now, pause_type: type, emergency_paid: emergencyPaid });
   res.json(await dayResponse(req.userId, dayId, changes));
 });
 
@@ -267,13 +274,16 @@ router.post("/:id/finish", async (req, res) => {
 
   const changes: RewardEvent[] = [];
 
-  if (day.pause_type === "emergency") {
-    // Ending the day during an emergency: no penalty, no reward
+  if (day.pause_type === "emergency" && !day.emergency_paid) {
+    // Ending the day during a FREE emergency stop: no penalty, no reward
     await closePauseEvents(day.id);
     await updateDay(day.id, { status: "excused", paused_at: null, pause_type: null });
   } else {
+    // During a PAID emergency stop, unfinished tasks still count as missed, but only cost XP
+    // (otherwise 20 coins could buy your way out of every penalty)
+    const duringPaidEmergency = day.pause_type === "emergency" && day.emergency_paid;
     day = await endPause(day, req.userId, changes);
-    await finishDay(day, req.userId, changes);
+    await finishDay(day, req.userId, changes, duringPaidEmergency);
   }
 
   res.json(await dayResponse(req.userId, day.id, changes));

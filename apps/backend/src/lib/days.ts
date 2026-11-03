@@ -73,18 +73,6 @@ export async function dayResponse(
   return { day, tasks, profile, status, reward_changes: rewardChanges };
 }
 
-export async function emergencyStopsLeft(userId: string): Promise<number> {
-  const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-  const { count, error } = await supabase
-    .from("pause_events")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", userId)
-    .eq("type", "emergency")
-    .gte("started_at", oneWeekAgo);
-  if (error) throw error;
-  return Math.max(0, RULES.emergencyStopsPerWeek - (count ?? 0));
-}
-
 export async function closePauseEvents(dayId: number) {
   const { error } = await supabase
     .from("pause_events")
@@ -204,8 +192,11 @@ export async function startNextTask(day: DayPlan, startAt: string = nowIso()) {
 }
 
 // Ends the day: unfinished tasks become "missed", then decide done/failed + bonus.
-export async function finishDay(day: DayPlan, userId: string, changes: RewardEvent[]) {
+// `duringPaidEmergency`: the day was ended during a PAID emergency stop.
+// Then missed tasks still count, but they only cost XP (the stop already cost coins).
+export async function finishDay(day: DayPlan, userId: string, changes: RewardEvent[], duringPaidEmergency = false) {
   const penalize = day.mode !== "flexible" || RULES.flexibleModePenalties;
+  const missPenalty = duringPaidEmergency ? { xp: REWARDS.missTask.xp, coins: 0 } : REWARDS.missTask;
   const tasks = await getTasks(day.id);
 
   for (const task of tasks) {
@@ -219,7 +210,7 @@ export async function finishDay(day: DayPlan, userId: string, changes: RewardEve
 
     await updateTask(task.id, { status: "missed" });
     if (penalize) {
-      record(changes, await changeRewards(userId, REWARDS.missTask, `Missed "${task.title}"`, day.id, task.id));
+      record(changes, await changeRewards(userId, missPenalty, `Missed "${task.title}"`, day.id, task.id));
     }
   }
 
@@ -231,7 +222,12 @@ export async function finishDay(day: DayPlan, userId: string, changes: RewardEve
   }
 
   await closePauseEvents(day.id);
-  await updateDay(day.id, { status: allDone ? "done" : "failed", paused_at: null, pause_type: null });
+  await updateDay(day.id, {
+    status: allDone ? "done" : "failed",
+    paused_at: null,
+    pause_type: null,
+    emergency_paid: false,
+  });
 }
 
 // If no tasks are left to do, the day is over.
@@ -290,6 +286,7 @@ export async function endPause(day: DayPlan, userId: string, changes: RewardEven
   return updateDay(day.id, {
     paused_at: null,
     pause_type: null,
+    emergency_paid: false,
     total_paused_seconds: day.total_paused_seconds + pausedSeconds,
     regular_paused_seconds: regularPaused,
     bonus_pause_seconds: bonusPause,
@@ -336,7 +333,8 @@ export async function checkTimers(day: DayPlan, userId: string, changes: RewardE
 //  - started but never finished -> unfinished tasks are missed
 //  - planned tasks but never started (and no Day Off card used) -> also missed
 //  - nothing planned -> left alone, no penalty
-//  - ended during an emergency stop -> excused
+//  - ended during a free emergency stop -> excused
+//  - ended during a paid emergency stop -> unfinished tasks are missed, but only cost XP
 export async function closeOldDays(userId: string, today: string): Promise<RewardEvent[]> {
   const { data: oldDays, error } = await supabase
     .from("day_plans")
@@ -348,7 +346,7 @@ export async function closeOldDays(userId: string, today: string): Promise<Rewar
 
   const changes: RewardEvent[] = [];
   for (const day of oldDays as DayPlan[]) {
-    if (day.pause_type === "emergency") {
+    if (day.pause_type === "emergency" && !day.emergency_paid) {
       await closePauseEvents(day.id);
       await updateDay(day.id, { status: "excused", paused_at: null, pause_type: null });
       continue;
@@ -359,7 +357,7 @@ export async function closeOldDays(userId: string, today: string): Promise<Rewar
       if (plannedRealTasks.length === 0) continue; // nothing was planned
     }
 
-    await finishDay(day, userId, changes);
+    await finishDay(day, userId, changes, day.pause_type === "emergency" && day.emergency_paid);
   }
   return changes;
 }

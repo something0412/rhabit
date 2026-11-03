@@ -34,6 +34,7 @@ export interface DayPlan {
   regular_paused_seconds: number; // only normal pauses (counts against the free allowance)
   bonus_pause_seconds: number; // extra free pause time from Pause Pack cards
   flexible_card_used: boolean; // a Flexible Day card was used to start this day (refunded on restart)
+  emergency_paid: boolean; // the current emergency stop was paid for (no free ones left this week)
 }
 
 export interface Task {
@@ -80,6 +81,7 @@ export interface PlayerStatus {
   level: LevelInfo;
   flexible: FlexibleStatus;
   inventory: Inventory;
+  emergency_stops_left: number; // free emergency stops left in the last 7 days
 }
 
 // A to-do on the Notes tab: no timer, no deadline, no rewards
@@ -148,7 +150,6 @@ export interface ProfileResponse {
   status: PlayerStatus;
   reward_events: RewardEvent[]; // history, newest first
   reward_changes: RewardEvent[]; // e.g. the free monthly Day Off card, just given
-  emergency_stops_left: number;
   days_off_taken: number;
 }
 

@@ -13,8 +13,8 @@ import { DetailsArrow, DetailsBox } from "@/components/common/Details";
 const taskStatusStyles: Record<TaskStatus, string> = {
   planned: "bg-subtle text-muted",
   running: "bg-accent-soft text-accent-ink",
-  completed: "bg-emerald-500/15 text-emerald-700",
-  missed: "bg-red-500/15 text-red-600",
+  completed: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
+  missed: "bg-red-500/15 text-red-600 dark:text-red-400",
   deleted: "bg-subtle text-muted",
 };
 
@@ -78,7 +78,7 @@ export function NoteCard({ note, onChanged, onDeleted }: Props) {
           aria-label={note.done ? "Mark as not done" : "Mark as done"}
           className="h-4 w-4 accent-[var(--accent)]"
         />
-        <DetailsArrow open={showDetails} hasDetails={note.details !== ""} onToggle={() => setShowDetails(!showDetails)} />
+        <DetailsArrow open={showDetails} onToggle={() => setShowDetails(!showDetails)} />
         <div className="min-w-0 flex-1">
           <p className={`text-sm ${note.done ? "text-muted line-through" : "font-medium"}`}>{note.title}</p>
           {note.added_to_date && (
@@ -92,7 +92,7 @@ export function NoteCard({ note, onChanged, onDeleted }: Props) {
             </p>
           )}
         </div>
-        <button onClick={deleteNote} className="rounded-md px-2 py-1 text-xs text-red-600 hover:bg-red-500/10">
+        <button onClick={deleteNote} className="rounded-md px-2 py-1 text-xs text-red-600 dark:text-red-400 hover:bg-red-500/10">
           Delete
         </button>
       </div>

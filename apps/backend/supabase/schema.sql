@@ -31,6 +31,7 @@ create table if not exists day_plans (
   regular_paused_seconds integer not null default 0,
   bonus_pause_seconds integer not null default 0,  -- from Pause Pack cards
   flexible_card_used boolean not null default false, -- refunded if the day is restarted
+  emergency_paid boolean not null default false,     -- the current emergency stop cost coins/XP
   created_at timestamptz not null default now(),
   unique (user_id, date)               -- one plan per user per day
 );

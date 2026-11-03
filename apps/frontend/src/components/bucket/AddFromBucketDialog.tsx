@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { BucketItem } from "@productivity/shared";
+import { HoloButton } from "@/components/common/HoloButton";
 
 interface Props {
   item: BucketItem;
@@ -15,7 +16,11 @@ export function AddFromBucketDialog({ item, minutesOptional, onAdd, onCancel }: 
   const [minutes, setMinutes] = useState(String(item.duration_minutes ?? (minutesOptional ? "" : 30))); // "" = no time
 
   return (
-    <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4" onClick={onCancel}>
+    <div
+      data-keep-bucket-open // clicking here shouldn't close the bucket drawer behind it
+      className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4"
+      onClick={onCancel}
+    >
       <form
         onClick={(e) => e.stopPropagation()} // clicking inside the box shouldn't close it
         onSubmit={(e) => {
@@ -46,9 +51,9 @@ export function AddFromBucketDialog({ item, minutesOptional, onAdd, onCancel }: 
           <button type="button" onClick={onCancel} className="rounded-lg px-4 py-2 text-sm text-muted hover:bg-subtle">
             Cancel
           </button>
-          <button type="submit" className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90">
+          <HoloButton type="submit">
             Add task
-          </button>
+          </HoloButton>
         </div>
       </form>
     </div>
