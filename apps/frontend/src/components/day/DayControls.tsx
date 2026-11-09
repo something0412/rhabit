@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { RotateCcw, TreePalm } from "lucide-react";
 import type { DayResponse } from "@productivity/shared";
-import { REWARDS, deadlineRemainingSeconds, formatSeconds } from "@productivity/shared";
+import { REWARDS, currentDeadline, deadlineRemainingSeconds, flexibleWorkSeconds, formatDuration, formatSeconds } from "@productivity/shared";
 import { api } from "@/lib/api";
 import { errorMessage } from "@/lib/errorMessage";
 import { formatReward } from "@/lib/rewards";
@@ -157,7 +157,9 @@ export function DayControls({ data, now, isToday, onUpdate }: Props) {
 
   // ----- the day is running -----
   const deadlineLeft = deadlineRemainingSeconds(day, now);
+  const deadlineAt = currentDeadline(day); // includes any time added by emergency stops
   const isEmergency = day.pause_type === "emergency";
+  const isFlexible = day.mode === "flexible"; // no pause, no emergency stop, no End day: it ends at midnight
 
   return (
     <section
@@ -172,21 +174,39 @@ export function DayControls({ data, now, isToday, onUpdate }: Props) {
         </p>
         {deadlineLeft !== null && (
           <p className="mt-1 font-mono text-2xl">
-            {formatSeconds(deadlineLeft)} <span className="font-sans text-xs text-muted">until deadline</span>
+            {formatSeconds(deadlineLeft)}{" "}
+            <span className="font-sans text-xs text-muted">
+              until deadline
+              {deadlineAt && ` (${new Date(deadlineAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })})`}
+              {day.deadline_extra_seconds > 0 && `, moved +${formatDuration(day.deadline_extra_seconds)}`}
+            </span>
+          </p>
+        )}
+        {/* Flexible: a count-up timer. It runs while tasks are left and stops when everything is done. */}
+        {isFlexible && (
+          <p className="mt-1 font-mono text-2xl">
+            {formatSeconds(flexibleWorkSeconds(day, now))}{" "}
+            <span className="font-sans text-xs text-muted">
+              {day.work_running_since ? "working time" : "all done in this time. Add a task to keep going"} · day
+              ends at midnight
+            </span>
           </p>
         )}
       </div>
 
       <div className="flex gap-2">
-        {day.paused_at ? (
+        {isFlexible ? null : day.paused_at ? (
           <HoloButton onClick={resumeDay}>
             Continue
           </HoloButton>
         ) : (
           <>
-            <button onClick={() => pauseDay("pause")} className="rounded-lg border border-line px-4 py-2 text-sm hover:bg-subtle">
-              Pause
-            </button>
+            {/* No Pause in deadline mode: there are no per-task timers to protect */}
+            {day.mode !== "deadline" && (
+              <button onClick={() => pauseDay("pause")} className="rounded-lg border border-line px-4 py-2 text-sm hover:bg-subtle">
+                Pause
+              </button>
+            )}
             <button
               onClick={() => setAskEmergency(true)}
               title={freeStopsLeft > 0 ? `${freeStopsLeft} free left this week` : `No free stops left this week: costs ${emergencyCost}`}
@@ -197,9 +217,11 @@ export function DayControls({ data, now, isToday, onUpdate }: Props) {
             </button>
           </>
         )}
-        <button onClick={finishDay} className="rounded-lg px-3 py-2 text-sm text-muted hover:bg-subtle">
-          End day
-        </button>
+        {!isFlexible && (
+          <button onClick={finishDay} className="rounded-lg px-3 py-2 text-sm text-muted hover:bg-subtle">
+            End day
+          </button>
+        )}
         {isToday && (
           <button onClick={restartDay} title="Restart day" className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm text-muted hover:bg-subtle">
             <RotateCcw className="h-4 w-4" aria-hidden /> Restart
@@ -211,6 +233,7 @@ export function DayControls({ data, now, isToday, onUpdate }: Props) {
         <EmergencyStopDialog
           freeStopsLeft={freeStopsLeft}
           cost={emergencyCost}
+          deadlineMode={day.mode === "deadline"}
           onConfirm={() => pauseDay("emergency")}
           onCancel={() => setAskEmergency(false)}
         />

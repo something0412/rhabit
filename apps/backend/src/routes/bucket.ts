@@ -1,21 +1,24 @@
 import { Router } from "express";
-import type { AddFromBucketResponse, BucketItem, Note, ScheduledTask } from "@productivity/shared";
+import type { AddFromBucketResponse, BucketItem, Note, ScheduledTask, Task } from "@productivity/shared";
+import { RULES } from "@productivity/shared";
 import { supabase } from "../supabase";
 import { HttpError, parseId } from "../httpError";
-import { todayIn } from "../lib/dates";
+import { addDays, todayIn } from "../lib/dates";
 import { getProfile } from "../lib/player";
 import { addTaskToDay, dayResponse, getDay } from "../lib/days";
 
-// The to-do bucket holds two kinds of things:
+// The to-do bucket holds three kinds of things:
 //  - notes you dragged into it (Notes tab)
-//  - scheduled tasks whose date has come (Scheduler tab)
-// From the Main tab you can drag them into your day's plan.
+//  - scheduled tasks whose date has come (Scheduler tab), for up to 7 days after their date
+//  - missed tasks from the last 7 days ("From previous days"), so you can try them again
+// From the Main tab you can drag them into your day's plan. Past things drop out after 7 days.
 
 const router = Router();
 
 async function getBucket(userId: string): Promise<BucketItem[]> {
   const profile = await getProfile(userId);
   const today = todayIn(profile.timezone);
+  const oldest = addDays(today, -RULES.bucketPastDays); // anything older than this has dropped out
 
   const { data: notes, error } = await supabase
     .from("notes")
@@ -34,6 +37,7 @@ async function getBucket(userId: string): Promise<BucketItem[]> {
     .eq("user_id", userId)
     .eq("status", "scheduled")
     .lte("date", today)
+    .gte("date", oldest)
     .order("date");
   if (scheduledError) throw scheduledError;
 
@@ -57,7 +61,41 @@ async function getBucket(userId: string): Promise<BucketItem[]> {
     time: null,
   }));
 
-  return [...fromSchedule, ...fromNotes];
+  // Missed tasks from the last 7 days (not today), not taken out of the bucket yet
+  const { data: pastDays, error: daysError } = await supabase
+    .from("day_plans")
+    .select("id, date")
+    .eq("user_id", userId)
+    .lt("date", today)
+    .gte("date", oldest);
+  if (daysError) throw daysError;
+
+  let fromMissed: BucketItem[] = [];
+  if (pastDays.length > 0) {
+    const dateOfDay = new Map<number, string>(pastDays.map((d) => [d.id, d.date]));
+    const { data: missed, error: missedError } = await supabase
+      .from("tasks")
+      .select("*")
+      .in("day_plan_id", [...dateOfDay.keys()])
+      .eq("status", "missed")
+      .eq("is_break", false)
+      .eq("bucket_done", false);
+    if (missedError) throw missedError;
+
+    fromMissed = (missed as Task[])
+      .map((t) => ({
+        source: "missed" as const,
+        id: t.id,
+        title: t.title,
+        details: t.details,
+        duration_minutes: t.duration_minutes,
+        date: dateOfDay.get(t.day_plan_id) ?? null, // the day it was missed
+        time: null,
+      }))
+      .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? "")); // most recent first
+  }
+
+  return [...fromSchedule, ...fromMissed, ...fromNotes];
 }
 
 // Finds a bucket item and checks it belongs to this user
@@ -68,17 +106,24 @@ async function getBucketItem(userId: string, source: unknown, id: number): Promi
 }
 
 // Takes an item out of the bucket.
-//  - added to a plan (addedTo given): the note becomes "assigned" / the scheduled task becomes "added",
-//    and both remember which task they became
-//  - just removed: the note goes back to the Notes list / the scheduled task is "dismissed"
+//  - added to a plan (addedTo given): the note becomes "assigned" / the scheduled task becomes "added" /
+//    the missed task is marked done in the bucket, and all remember which task they became
+//  - just removed: the note goes back to the Notes list / the scheduled task is "dismissed" /
+//    the missed task is marked done in the bucket (it stays missed, its penalty already happened)
 async function removeFromBucket(item: BucketItem, addedTo: { date: string; taskId: number } | null) {
   if (item.source === "note") {
     const changes = addedTo ? { in_bucket: false, added_to_date: addedTo.date, task_id: addedTo.taskId } : { in_bucket: false };
     const { error } = await supabase.from("notes").update(changes).eq("id", item.id);
     if (error) throw error;
-  } else {
+  } else if (item.source === "scheduled") {
     const changes = addedTo ? { status: "added", task_id: addedTo.taskId } : { status: "dismissed" };
     const { error } = await supabase.from("scheduled_tasks").update(changes).eq("id", item.id);
+    if (error) throw error;
+  } else {
+    const { error } = await supabase
+      .from("tasks")
+      .update({ bucket_done: true, redo_task_id: addedTo ? addedTo.taskId : null })
+      .eq("id", item.id);
     if (error) throw error;
   }
 }

@@ -35,6 +35,9 @@ export interface DayPlan {
   bonus_pause_seconds: number; // extra free pause time from Pause Pack cards
   flexible_card_used: boolean; // a Flexible Day card was used to start this day (refunded on restart)
   emergency_paid: boolean; // the current emergency stop was paid for (no free ones left this week)
+  deadline_extra_seconds: number; // deadline mode: how much later emergency stops moved the deadline (rounded up)
+  work_seconds: number; // flexible mode: counted-up working time so far (while tasks were left to do)
+  work_running_since: string | null; // flexible mode: the count-up timer is running since then (null = stopped)
 }
 
 export interface Task {
@@ -49,6 +52,9 @@ export interface Task {
   started_at: string | null; // when this task's timer started (timer mode)
   paused_seconds: number; // how long this task spent paused
   completed_at: string | null;
+  created_at: string; // when the task was added (flexible mode: the 10-minute rule)
+  bucket_done: boolean; // a MISSED task was taken out of the bucket ("From previous days"): re-added or ignored
+  redo_task_id: number | null; // a missed task that was re-added: the new task it became
 }
 
 // One row in the rewards history: +10 XP +5 coins, -15 XP -15 coins, etc.
@@ -116,7 +122,7 @@ export interface ScheduledTask {
 }
 
 // Something in the to-do bucket: either a note or a scheduled task that's due
-export type BucketSource = "note" | "scheduled";
+export type BucketSource = "note" | "scheduled" | "missed"; // missed = a task missed on a previous day
 
 export interface BucketItem {
   source: BucketSource;

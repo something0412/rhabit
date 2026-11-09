@@ -9,13 +9,14 @@ const AUTO_CONFIRM_SECONDS = 10;
 interface Props {
   freeStopsLeft: number;
   cost: string; // e.g. "20 coins" or "10 XP" (only used when no free stops are left)
+  deadlineMode: boolean; // deadline mode: tell them the deadline will move
   onConfirm: () => void;
   onCancel: () => void;
 }
 
 // "Are you sure?" before an emergency stop.
 // In a real emergency there may be no time to answer, so after 10 seconds it stops anyway.
-export function EmergencyStopDialog({ freeStopsLeft, cost, onConfirm, onCancel }: Props) {
+export function EmergencyStopDialog({ freeStopsLeft, cost, deadlineMode, onConfirm, onCancel }: Props) {
   const [secondsLeft, setSecondsLeft] = useState(AUTO_CONFIRM_SECONDS);
   const confirmed = useRef(false); // so the stop is only sent once (button click OR countdown)
 
@@ -61,6 +62,14 @@ export function EmergencyStopDialog({ freeStopsLeft, cost, onConfirm, onCancel }
               If you end the day during this stop, unfinished tasks still count as missed, but they only cost XP.
             </p>
           </>
+        )}
+
+        {deadlineMode && (
+          <p className="mt-2 rounded-md bg-subtle p-2 text-xs text-ink">
+            Your deadline will move later by the time you&apos;re stopped, rounded up to the next{" "}
+            {RULES.deadlineStopRoundMinutes} minutes. For example, stopped for 1 h 25 min: a 5:00 PM deadline becomes
+            6:30 PM.
+          </p>
         )}
 
         <p className="mt-4 text-xs text-muted">

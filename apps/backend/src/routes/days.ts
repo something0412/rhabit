@@ -127,7 +127,12 @@ router.post("/:id/start", async (req, res) => {
     }
   }
 
-  const started = await updateDay(day.id, { status: "active", started_at: nowIso() });
+  const now = nowIso();
+  const started = await updateDay(day.id, {
+    status: "active",
+    started_at: now,
+    work_running_since: day.mode === "flexible" ? now : null, // flexible: the count-up timer starts
+  });
   await startNextTask(started); // timer mode: first task's timer starts now
 
   res.json(await dayResponse(req.userId, day.id, changes));
@@ -204,6 +209,9 @@ router.post("/:id/restart", async (req, res) => {
     bonus_pause_seconds: 0,
     flexible_card_used: false,
     emergency_paid: false,
+    deadline_extra_seconds: 0, // the deadline goes back to the time the user set
+    work_seconds: 0,
+    work_running_since: null,
   });
 
   res.json(await dayResponse(req.userId, day.id, changes));
@@ -218,6 +226,14 @@ router.post("/:id/pause", async (req, res) => {
   let day = await getDay(dayId, req.userId);
   if (day.status !== "active") throw new HttpError(400, "The day isn't running");
   if (day.paused_at) throw new HttpError(400, "The day is already paused");
+  // Flexible mode has no timers and no deadline, so there's nothing to pause or stop
+  if (day.mode === "flexible") {
+    throw new HttpError(400, "Flexible mode has no pause or emergency stop. The day simply ends at midnight.");
+  }
+  // Deadline mode has no per-task timers, so there's nothing for a normal pause to protect
+  if (type === "pause" && day.mode === "deadline") {
+    throw new HttpError(400, "Deadline mode has no pause. Use your time however you like before the deadline.");
+  }
 
   // Make sure nothing already ran out BEFORE we freeze time
   await checkTimers(day, req.userId, changes);
@@ -271,6 +287,7 @@ router.post("/:id/check", async (req, res) => {
 router.post("/:id/finish", async (req, res) => {
   let day = await getDay(parseId(req.params.id), req.userId);
   if (day.status !== "active") throw new HttpError(400, "The day isn't running");
+  if (day.mode === "flexible") throw new HttpError(400, "Flexible days end on their own at midnight.");
 
   const changes: RewardEvent[] = [];
 

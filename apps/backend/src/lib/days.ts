@@ -1,8 +1,8 @@
 import type { DayPlan, DayResponse, RewardEvent, Task } from "@productivity/shared";
-import { REWARDS, RULES, deadlineRemainingSeconds, taskRemainingSeconds } from "@productivity/shared";
+import { REWARDS, RULES, deadlineRemainingSeconds, formatDuration, taskRemainingSeconds } from "@productivity/shared";
 import { supabase } from "../supabase";
 import { HttpError } from "../httpError";
-import { nowIso } from "./dates";
+import { nowIso, todayIn } from "./dates";
 import { getInventory, useItem } from "./inventory";
 import { getProfile, playerStatus } from "./player";
 import { addNote, changeRewards } from "./rewards";
@@ -82,6 +82,23 @@ export async function closePauseEvents(dayId: number) {
   if (error) throw error;
 }
 
+// ---------- flexible mode ----------
+// A flexible day has no timers and no deadline: it simply ends at midnight (in the user's timezone).
+// It has a count-up timer instead: it runs while there are tasks left to do.
+
+export async function flexibleDayIsOver(day: DayPlan, userId: string): Promise<boolean> {
+  if (day.mode !== "flexible") return false;
+  const profile = await getProfile(userId);
+  return day.date < todayIn(profile.timezone);
+}
+
+// Stop the count-up timer (everything is done): add the running time to work_seconds
+export function stoppedWorkTimer(day: DayPlan): Partial<DayPlan> {
+  if (!day.work_running_since) return {};
+  const ranFor = Math.round((Date.now() - Date.parse(day.work_running_since)) / 1000);
+  return { work_seconds: day.work_seconds + Math.max(0, ranFor), work_running_since: null };
+}
+
 // ---------- day logic ----------
 
 interface NewTask {
@@ -158,6 +175,10 @@ export async function addTaskToDay(day: DayPlan, input: NewTask): Promise<number
 
   // Adding a task mid-day is free. In timer mode, start it if nothing is running.
   if (day.status === "active" && !day.paused_at) await startNextTask(day);
+  // Flexible: a new task while everything was done starts the count-up timer again
+  if (day.status === "active" && day.mode === "flexible" && !day.work_running_since) {
+    await updateDay(day.id, { work_running_since: nowIso() });
+  }
 
   return created.id;
 }
@@ -175,6 +196,13 @@ export async function releaseTaskSources(taskId: number) {
     .update({ status: "scheduled", task_id: null })
     .eq("task_id", taskId);
   if (scheduledError) throw scheduledError;
+
+  // a missed task that was re-added: back to "From previous days"
+  const { error: missedError } = await supabase
+    .from("tasks")
+    .update({ bucket_done: false, redo_task_id: null })
+    .eq("redo_task_id", taskId);
+  if (missedError) throw missedError;
 }
 
 // Timer mode only: tasks run one after another, so start the next planned one.
@@ -227,6 +255,7 @@ export async function finishDay(day: DayPlan, userId: string, changes: RewardEve
     paused_at: null,
     pause_type: null,
     emergency_paid: false,
+    ...stoppedWorkTimer(day), // flexible: freeze the count-up timer at its final time
   });
 }
 
@@ -234,7 +263,16 @@ export async function finishDay(day: DayPlan, userId: string, changes: RewardEve
 export async function finishDayIfDone(day: DayPlan, userId: string, changes: RewardEvent[]) {
   const tasks = await getTasks(day.id);
   const anythingLeft = tasks.some((t) => t.status === "planned" || t.status === "running");
-  if (!anythingLeft) await finishDay(day, userId, changes);
+  if (anythingLeft) return;
+
+  if (day.mode === "flexible") {
+    // A flexible day stays open until midnight (you can still add tasks): just stop the count-up timer.
+    // The full-day bonus comes when the day closes at midnight.
+    const fresh = await getDay(day.id, userId);
+    await updateDay(day.id, stoppedWorkTimer(fresh));
+    return;
+  }
+  await finishDay(day, userId, changes);
 }
 
 // Resume after a pause / emergency stop.
@@ -256,6 +294,20 @@ export async function endPause(day: DayPlan, userId: string, changes: RewardEven
 
   let regularPaused = day.regular_paused_seconds;
   let bonusPause = day.bonus_pause_seconds;
+  let deadlineExtra = day.deadline_extra_seconds;
+
+  // Deadline mode: an emergency stop moves the deadline later by the stopped time, rounded UP
+  // to the next RULES.deadlineStopRoundMinutes (30: stopped 1h 25m -> +1h 30m). A note in the history tells the user.
+  if (day.mode === "deadline" && day.pause_type === "emergency" && day.deadline_at && pausedSeconds > 0) {
+    const roundTo = RULES.deadlineStopRoundMinutes * 60;
+    const added = Math.ceil(pausedSeconds / roundTo) * roundTo;
+    deadlineExtra += added;
+    const newDeadline = Date.parse(day.deadline_at) + deadlineExtra * 1000;
+    // e.g. "7:00 PM", in the user's own timezone
+    const { timezone } = await getProfile(userId);
+    const newTime = new Date(newDeadline).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: timezone });
+    record(changes, await addNote(userId, `Deadline moved ${formatDuration(added)} later (emergency stop): now ${newTime}`, day.id));
+  }
 
   if (day.pause_type === "pause") {
     const freeSeconds = () => RULES.freePauseMinutesPerDay * 60 + bonusPause;
@@ -287,6 +339,7 @@ export async function endPause(day: DayPlan, userId: string, changes: RewardEven
     paused_at: null,
     pause_type: null,
     emergency_paid: false,
+    deadline_extra_seconds: deadlineExtra,
     total_paused_seconds: day.total_paused_seconds + pausedSeconds,
     regular_paused_seconds: regularPaused,
     bonus_pause_seconds: bonusPause,
@@ -325,6 +378,11 @@ export async function checkTimers(day: DayPlan, userId: string, changes: RewardE
   }
 
   if (day.mode === "deadline" && deadlineRemainingSeconds(day) === 0) {
+    await finishDay(day, userId, changes);
+  }
+
+  // Flexible: the day is over at midnight (unfinished tasks become missed; the bonus if all were done)
+  if (await flexibleDayIsOver(day, userId)) {
     await finishDay(day, userId, changes);
   }
 }

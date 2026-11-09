@@ -23,10 +23,17 @@ export const RULES = {
   freePauseMinutesPerDay: 30,
   pauseCardMinutes: 30, // each Pause Pack card adds this much free pause time
   emergencyStopsPerWeek: 2,
+  // Deadline mode has no Pause. An emergency stop moves the deadline later by the stopped time,
+  // rounded UP to this many minutes (30: stopped 1h 25m -> deadline moves 1h 30m; stopped 5m -> 30m).
+  deadlineStopRoundMinutes: 30,
 
   flexibleUnlockLevel: 5, // flexible mode unlocks at this level...
   badWeekMissedTasks: 3, // ...but locks while you have this many missed tasks in the last 7 days
-  flexibleModePenalties: false, // open decision: does flexible mode ever take XP/coins?
+  flexibleModePenalties: true, // decided: flexible tasks still unfinished at midnight cost the normal missed penalty
+  // The bucket keeps past things for this many days, then they drop out of it:
+  // "Past scheduled" (scheduled tasks never added) and "From previous days" (missed tasks)
+  bucketPastDays: 7,
+  flexibleMinTaskMinutes: 10, // flexible: a task only earns if done at least this long after it was added / the day started
 
   breakSuggestAfterMinutes: 180, // suggest a break after 3h of back-to-back tasks
   breakSuggestLengthMinutes: 30,

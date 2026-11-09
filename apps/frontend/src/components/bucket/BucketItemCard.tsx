@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarDays, StickyNote, X } from "lucide-react";
+import { CalendarDays, History, StickyNote, X } from "lucide-react";
 import type { BucketItem } from "@productivity/shared";
 import { api } from "@/lib/api";
 import { errorMessage } from "@/lib/errorMessage";
@@ -22,14 +22,17 @@ export function BucketItemCard({ item, today, onRemove, onDetailsSaved }: Props)
   const { notify } = useNotifications();
   const [showDetails, setShowDetails] = useState(false);
   const isScheduled = item.source === "scheduled";
+  const isMissed = item.source === "missed"; // a task missed on a previous day
 
   // A bucket item is really a note or a scheduled task, so save to the right place
   async function saveDetails(details: string) {
     try {
       if (item.source === "note") {
         await api.patch(`/notes/${item.id}`, { details });
-      } else {
+      } else if (item.source === "scheduled") {
         await api.patch(`/schedule/${item.id}`, { details });
+      } else {
+        await api.patch(`/tasks/${item.id}`, { details }); // a missed task: its details live on the task
       }
       onDetailsSaved(item, details);
     } catch (error) {
@@ -49,8 +52,14 @@ export function BucketItemCard({ item, today, onRemove, onDetailsSaved }: Props)
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium">{item.title}</p>
           <p className="flex items-center gap-1 text-[11px] text-muted">
-            {isScheduled ? <CalendarDays className="h-3 w-3" aria-hidden /> : <StickyNote className="h-3 w-3" aria-hidden />}
-            {isScheduled ? "Scheduled" : "Note"}
+            {isMissed ? (
+              <History className="h-3 w-3" aria-hidden />
+            ) : isScheduled ? (
+              <CalendarDays className="h-3 w-3" aria-hidden />
+            ) : (
+              <StickyNote className="h-3 w-3" aria-hidden />
+            )}
+            {isMissed ? "Missed" : isScheduled ? "Scheduled" : "Note"}
             {item.time && ` · ${prettyTime(item.time)}`}
             {item.duration_minutes && ` · ${item.duration_minutes} min`}
             {item.date && item.date < today && ` · from ${prettyDate(item.date)}`}
@@ -58,7 +67,7 @@ export function BucketItemCard({ item, today, onRemove, onDetailsSaved }: Props)
         </div>
         <button
           onClick={() => onRemove(item)}
-          title={isScheduled ? "Ignore it" : "Put it back in Notes"}
+          title={isScheduled || isMissed ? "Ignore it" : "Put it back in Notes"}
           aria-label="Remove from bucket"
           className="rounded-md px-1.5 text-muted hover:bg-subtle hover:text-ink"
         >

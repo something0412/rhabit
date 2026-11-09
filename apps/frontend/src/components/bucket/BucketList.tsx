@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { BucketItem } from "@productivity/shared";
-import { CalendarDays, ChevronDown, StickyNote } from "lucide-react";
+import { CalendarClock, CalendarDays, ChevronDown, History, StickyNote } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { BucketItemCard } from "./BucketItemCard";
 
@@ -13,19 +13,29 @@ interface Props {
   onDetailsSaved: (item: BucketItem, details: string) => void;
 }
 
-// The items in the bucket, split into two groups:
-// scheduled tasks first (they were planned for today, so they matter more), then regular notes.
+// The items in the bucket, split into groups:
+//  - Scheduled: scheduled tasks for TODAY (always shown, even when empty)
+//  - From previous days: tasks you missed in the last 7 days, to try again
+//  - Regular: notes dragged into the bucket
+//  - Past scheduled: scheduled tasks from the last 7 days you never added (starts folded)
+// After 7 days, past things drop out of the bucket (the server stops sending them).
 // Click a group's header to fold it closed / open.
 // Used by the bucket drawer (Main tab) and the bucket box (Notes tab).
 export function BucketList({ items, today, onRemove, onDetailsSaved }: Props) {
-  const [closedGroups, setClosedGroups] = useState<string[]>([]); // labels of the folded groups
+  const [closedGroups, setClosedGroups] = useState<string[]>(["Past scheduled"]); // labels of the folded groups
 
-  const scheduled = items.filter((item) => item.source === "scheduled");
+  const scheduledItems = items.filter((item) => item.source === "scheduled");
+  const scheduled = scheduledItems.filter((item) => (item.date ?? today) >= today);
+  const pastScheduled = scheduledItems.filter((item) => (item.date ?? today) < today).reverse(); // newest first
+  const missed = items.filter((item) => item.source === "missed");
   const regular = items.filter((item) => item.source === "note");
 
   const groups = [
-    { label: "Scheduled", Icon: CalendarDays, items: scheduled },
-    { label: "Regular", Icon: StickyNote, items: regular },
+    // alwaysShow: "Scheduled" stays even when empty, so it's clear nothing is scheduled for today
+    { label: "Scheduled", Icon: CalendarDays, items: scheduled, alwaysShow: true, emptyText: "No scheduled tasks for today." },
+    { label: "From previous days", Icon: History, items: missed, alwaysShow: false, emptyText: "" },
+    { label: "Regular", Icon: StickyNote, items: regular, alwaysShow: false, emptyText: "" },
+    { label: "Past scheduled", Icon: CalendarClock, items: pastScheduled, alwaysShow: false, emptyText: "" },
   ];
 
   function toggleGroup(label: string) {
@@ -35,7 +45,7 @@ export function BucketList({ items, today, onRemove, onDetailsSaved }: Props) {
   return (
     <div className="flex flex-col gap-3">
       {groups
-        .filter((group) => group.items.length > 0) // hide a group with nothing in it
+        .filter((group) => group.alwaysShow || group.items.length > 0) // hide an empty group (except Scheduled)
         .map((group) => {
           const open = !closedGroups.includes(group.label);
           return (
@@ -64,6 +74,7 @@ export function BucketList({ items, today, onRemove, onDetailsSaved }: Props) {
                     transition={{ duration: 0.2, ease: "easeOut" }}
                     className="flex flex-col gap-2 overflow-hidden pt-2"
                   >
+                    {group.items.length === 0 && <li className="px-1 text-xs text-muted">{group.emptyText}</li>}
                     {group.items.map((item) => (
                       <BucketItemCard
                         key={`${item.source}-${item.id}`}
