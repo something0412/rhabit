@@ -20,4 +20,6 @@ next-env.d.ts
 
 # local usage (used when there are no Supabase keys)
 .local-db.json
-CLAUDE.md
+CLAUDE.*
+.claude
+AGENTS.*

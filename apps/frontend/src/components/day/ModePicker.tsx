@@ -11,7 +11,7 @@ import { TimePicker } from "@/components/common/TimePicker";
 const modes: { mode: DayMode; title: string; description: string; Icon: LucideIcon }[] = [
   { mode: "timer", title: "Timer", description: "Every task gets its own countdown, one after another.", Icon: Timer },
   { mode: "deadline", title: "Deadline", description: "Finish all tasks before a set time.", Icon: AlarmClock },
-  { mode: "flexible", title: "Flexible", description: "No timers, no deadline. You've earned it.", Icon: Waves },
+  { mode: "flexible", title: "Flexible", description: "No timers, no deadline: the whole day until midnight. You've earned it.", Icon: Waves },
 ];
 
 // "2026-10-20T22:00:00Z" -> "17:00" (in the browser's local time)

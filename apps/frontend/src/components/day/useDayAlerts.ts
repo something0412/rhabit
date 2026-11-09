@@ -5,6 +5,7 @@ import type { DayResponse, Task } from "@productivity/shared";
 import { RULES, deadlineRemainingSeconds, taskRemainingSeconds } from "@productivity/shared";
 import { api } from "@/lib/api";
 import { errorMessage } from "@/lib/errorMessage";
+import { localDate } from "@/lib/dates";
 import { useNotifications } from "@/components/notifications/NotificationProvider";
 
 // Watches the day every second and sends notifications:
@@ -41,7 +42,7 @@ export function useDayAlerts(data: DayResponse | null, now: number, onUpdate: (d
       const left = deadlineRemainingSeconds(day, now);
       if (left !== null) {
         for (const warnAt of RULES.deadlineWarningSeconds) {
-          const key = `deadline-${day.id}-${day.started_at}-${warnAt}`;
+          const key = `deadline-${day.id}-${day.started_at}-${day.deadline_extra_seconds}-${warnAt}`; // a moved deadline warns again
           if (left > 0 && left <= warnAt && !alreadyWarned.current.has(key)) {
             alreadyWarned.current.add(key);
             const tasksLeft = tasks.filter((t) => t.status === "planned" && !t.is_break).length;
@@ -51,6 +52,9 @@ export function useDayAlerts(data: DayResponse | null, now: number, onUpdate: (d
         if (left === 0) timeIsUp = true;
       }
     }
+
+    // Flexible: the day ends at midnight. If the app is still open when the date changes, ask the server.
+    if (day.mode === "flexible" && localDate(new Date(now)) !== day.date) timeIsUp = true;
 
     // Time ran out: the SERVER decides what happens (at most once every 5 s)
     if (timeIsUp && now - lastCheckAt.current > 5000) {

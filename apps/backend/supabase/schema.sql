@@ -32,6 +32,9 @@ create table if not exists day_plans (
   bonus_pause_seconds integer not null default 0,  -- from Pause Pack cards
   flexible_card_used boolean not null default false, -- refunded if the day is restarted
   emergency_paid boolean not null default false,     -- the current emergency stop cost coins/XP
+  deadline_extra_seconds integer not null default 0,  -- deadline mode: emergency stops moved the deadline this much
+  work_seconds integer not null default 0,            -- flexible mode: counted-up working time
+  work_running_since timestamptz,                     -- flexible mode: count-up timer running since (null = stopped)
   created_at timestamptz not null default now(),
   unique (user_id, date)               -- one plan per user per day
 );
@@ -49,7 +52,9 @@ create table if not exists tasks (
   started_at timestamptz,
   paused_seconds integer not null default 0,
   completed_at timestamptz,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  bucket_done boolean not null default false, -- a missed task taken out of the bucket (re-added or ignored)
+  redo_task_id bigint                         -- a missed task that was re-added: the new task it became
 );
 
 -- The rewards "ledger": one row for every XP/coins change (and notes like "Used a Day Off card")

@@ -40,8 +40,20 @@ const defaults: Record<string, Row> = {
     bonus_pause_seconds: 0,
     flexible_card_used: false,
     emergency_paid: false,
+    deadline_extra_seconds: 0,
+    work_seconds: 0,
+    work_running_since: null,
   },
-  tasks: { details: "", is_break: false, status: "planned", started_at: null, paused_seconds: 0, completed_at: null },
+  tasks: {
+    details: "",
+    is_break: false,
+    status: "planned",
+    started_at: null,
+    paused_seconds: 0,
+    completed_at: null,
+    bucket_done: false,
+    redo_task_id: null,
+  },
   notes: { details: "", done: false, in_bucket: false, added_to_date: null, task_id: null },
   scheduled_tasks: { details: "", time: null, duration_minutes: null, status: "scheduled", task_id: null },
   reward_events: { xp: 0, coins: 0, day_plan_id: null, task_id: null },
@@ -50,7 +62,7 @@ const defaults: Record<string, Row> = {
 };
 
 // Bump this when the tables change, so an old .local-db.json is replaced with a fresh one
-const VERSION = 4;
+const VERSION = 7;
 
 function emptyDb() {
   const tables: Record<string, Row[]> = {};

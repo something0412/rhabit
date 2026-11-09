@@ -10,6 +10,7 @@ import {
   checkTimers,
   dayResponse,
   finishDayIfDone,
+  flexibleDayIsOver,
   getDay,
   getTaskAndDay,
   getTasks,
@@ -111,7 +112,8 @@ router.post("/:id/complete", async (req, res) => {
   // Too late? Let the server's timer check decide instead.
   const timeIsUp =
     (day.mode === "timer" && taskRemainingSeconds(task, day) === 0) ||
-    (day.mode === "deadline" && deadlineRemainingSeconds(day) === 0);
+    (day.mode === "deadline" && deadlineRemainingSeconds(day) === 0) ||
+    (await flexibleDayIsOver(day, req.userId)); // flexible: past midnight
   if (timeIsUp) {
     await checkTimers(day, req.userId, changes);
     res.json(await dayResponse(req.userId, day.id, changes));
@@ -123,7 +125,20 @@ router.post("/:id/complete", async (req, res) => {
   // Breaks and very short tasks don't earn anything (anti-farming).
   // Tasks with no time set (deadline/flexible mode) do earn: the deadline keeps them honest.
   const tooShort = task.duration_minutes !== null && task.duration_minutes < RULES.minMinutesForRewards;
-  if (!task.is_break && !tooShort) {
+
+  // Flexible mode (anti-farming): a task only earns if at least 10 minutes passed since it was added,
+  // or since Start day if it was planned before. Ticking it sooner still completes it, it just earns nothing.
+  let tooFast = false;
+  if (day.mode === "flexible" && !task.is_break && !tooShort) {
+    const countFrom = Math.max(Date.parse(task.created_at), Date.parse(day.started_at ?? task.created_at));
+    tooFast = Date.now() - countFrom < RULES.flexibleMinTaskMinutes * 60 * 1000;
+    if (tooFast) {
+      const reason = `"${task.title}" was done within ${RULES.flexibleMinTaskMinutes} min, so it earned nothing`;
+      record(changes, await addNote(req.userId, reason, day.id, task.id));
+    }
+  }
+
+  if (!task.is_break && !tooShort && !tooFast) {
     record(changes, await changeRewards(req.userId, REWARDS.completeTask, `Completed "${task.title}"`, day.id, task.id));
   }
 

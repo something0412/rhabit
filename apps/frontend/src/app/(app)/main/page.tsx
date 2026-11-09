@@ -88,7 +88,8 @@ export default function MainPage() {
           setBucketOpen(true);
         }
 
-        const dueCount = res.data.filter((item) => item.source === "scheduled").length;
+        // only the ones planned for TODAY (older scheduled tasks are still in the bucket, but they're not "new")
+        const dueCount = res.data.filter((item) => item.source === "scheduled" && item.date === localDate()).length;
         const noticeKey = `scheduled-notice-${localDate()}`;
         let alreadyShown = false;
         try {

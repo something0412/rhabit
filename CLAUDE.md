@@ -82,7 +82,9 @@ packages/shared types, REWARDS/RULES config, store items, timer math, levels, wo
   time; task minutes optional), **Flexible** (no timers; minutes optional). Start, Pause (30 min free/day),
   Emergency stop (2 free/week, freezes everything; never blocked: after the free ones it costs 20 coins, or 10 XP at
   0 coins; confirm dialog auto-applies after 10s; ending the day during a *paid* stop = missed tasks cost XP only,
-  a free stop excuses the day), End day, **Restart day** (today only; undoes ALL of today's XP/coins,
+  a free stop excuses the day; **Deadline mode has no Pause** (server refuses it), and an emergency stop there moves
+  the deadline later by the stopped time rounded UP to 30 min (`RULES.deadlineStopRoundMinutes`), stored in `day_plans.deadline_extra_seconds`,
+  reset by Restart; `currentDeadline()` in shared timers), End day, **Restart day** (today only; undoes ALL of today's XP/coins,
   tasks back to planned, refunds a used Flexible card and today's emergency stops). Drag tasks to reorder (planning
   only). Task details dropdown on every task. Rule-based break suggestion after 3h in a row. Bucket drawer (auto
   opens only on the first Main visit per app load when it has items, auto closes when emptied, click outside closes it;
@@ -94,6 +96,13 @@ packages/shared types, REWARDS/RULES config, store items, timer math, levels, wo
 - **Mode picker** (`ModePicker.tsx`): radio cards styled after Lightswind's Smart Radio Group (a *Pro* component, so
   rebuilt from the public demo's look, not its code): icon square, radio dot, accent fill sweeps in from the left.
 - **Flexible mode:** unlocked at Level 5, locked while 3+ missed tasks in the last 7 days; or use a Flexible Day card.
+  The whole calendar day is the limit: **no Pause, no Emergency stop, no End day** (server refuses them); the day
+  closes at midnight in the user's timezone (`flexibleDayIsOver`, via checkTimers / closeOldDays; the frontend
+  asks the server when the local date changes), unfinished tasks become missed, and the full-day bonus is given
+  then. Finishing every task does NOT close the day (you can add more). A **count-up timer** (`work_seconds` +
+  `work_running_since` on day_plans, `flexibleWorkSeconds()`) runs from Start day while tasks are left, stops when
+  all are done, restarts when a task is added. Anti-farming: a flexible task only earns if done at least
+  `RULES.flexibleMinTaskMinutes` (10) after it was added (or after Start day if planned before).
 - **Days off:** 1 free Day Off card per month + buy more; a planned day never started (with tasks, no day off) counts
   as missed when closed out. Old unfinished days are closed lazily on next load.
 - **Store tab:** cards (Day Off 60, Flexible Day 40, Delete 15, Pause Pack 15 — auto-used), themes, characters.
@@ -103,7 +112,10 @@ packages/shared types, REWARDS/RULES config, store items, timer math, levels, wo
 - **Work-hour reminders** (in-app only, while app is open): "Ready to start your day?" at start, "Still working
   today?" with Start day / Take a day off 1h later. Alerts for a started task always show.
 - **Notes tab:** to-dos (no timer, no rewards) + **To-do bucket** (drag notes in/out; `BucketList` shows a
-  "Scheduled" group above a "Regular" group, each foldable by clicking its header, in both the Main drawer and
+  "Scheduled" group (due TODAY; always shown, "No scheduled tasks for today." when empty), "From previous days"
+  (tasks missed in the last 7 days; source "missed"; re-adding or X sets `tasks.bucket_done`, re-added ones remember
+  `redo_task_id` and come back if that new task is deleted), "Regular", and "Past scheduled" (scheduled in the last
+  7 days, never added; starts folded); past things drop out after `RULES.bucketPastDays` = 7; each group folds, in both the Main drawer and
   the Notes box; on the Notes tab the bucket box is capped at 2/3 and Assigned at 1/3 of the screen (minus the
   page header), each scrolling inside) + **Assigned** section (notes
   that became a task; they can't be re-bucketed — anti-farming; deleting the task returns the note).
@@ -130,7 +142,6 @@ packages/shared types, REWARDS/RULES config, store items, timer math, levels, wo
   before building: whether small apps can connect directly was unclear in Oct 2026.
 - Mobile app (Expo in `apps/mobile`, reusing `packages/shared` and the same API).
 - Deployment to Vercel (two projects), a real Supabase project, Git repo + GitHub.
-- Open decision: should Flexible mode ever give/take XP? (`RULES.flexibleModePenalties`, currently false).
 
 ## Testing habits that worked
 
